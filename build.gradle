@@ -3,6 +3,7 @@ plugins {
 	id 'java'
 	id 'fabric-loom' version '1.9-SNAPSHOT'
 	id 'maven-publish'
+	id 'com.github.johnrengelman.shadow' version '8.1.1'
 }
 
 version = project.plugin_version
@@ -20,19 +21,10 @@ configurations {
 }
 
 repositories {
-	// Add repositories to retrieve artifacts from in here.
-	// Loom adds the essential maven repositories to download Minecraft and libraries from automatically.
-	// See https://docs.gradle.org/current/userguide/declaring_repositories.html
-	// for more information about repositories.
-
 	maven {
 		name = "rusherhack"
-		//releases repository will have the latest api version for last stable rusherhack release
-		//snapshots will always be the latest api version
-		//url = "https://maven.rusherhack.org/releases"
 		url = "https://maven.rusherhack.org/snapshots"
 	}
-
 	maven {
 		name = 'ParchmentMC'
 		url = 'https://maven.parchmentmc.org'
@@ -44,28 +36,26 @@ dependencies {
 	productionRuntime(modImplementation("net.fabricmc:fabric-loader:${project.fabric_loader_version}"))
 	productionRuntime("net.fabricmc:intermediary:${project.minecraft_version}")
 	implementation 'com.google.code.gson:gson:2.10.1'
-	implementation 'org.java-websocket:Java-WebSocket:1.5.3'
+	implementation 'org.java-websocket:Java-WebSocket:1.5.4'
 
-	//mojmap + parchment mappings
 	mappings loom.layered() {
 		officialMojangMappings()
 		parchment("org.parchmentmc.data:parchment-${project.parchment_version}@zip")
 	}
 
-	//rusherhack api
 	rusherhackApi "org.rusherhack:rusherhack-api:$minecraft_version-SNAPSHOT"
 }
 
 tasks.register('updateAccessWidener', Copy) {
 	group = "build"
 	outputs.upToDateWhen { false }
-	
+
 	def accessWidenerFile = zipTree(this.project.configurations.rusherhackApi.singleFile).matching {
 		include "rusherhack.accesswidener"
 	}.files.iterator().next()
-	
+
 	println("rusherhack access widener: " + accessWidenerFile)
-	
+
 	from(accessWidenerFile)
 	into(file("build/tmp/" + this.project.minecraft_version))
 }
@@ -91,11 +81,10 @@ tasks.register('runPlugin', JavaExec) {
 		if (!rusherLoaderJarFile.exists()) {
 			throw new GradleException("rusherhack-loader.jar must be copied to the lib directory!")
 		}
-		def rusherLoaderJarPath = project.layout.getProjectDirectory().file("lib/rusherhack-loader.jar").asFile.absolutePath
 
 		jvmArgs(
 				"-Drusherhack.enablePlugins=true",
-				"-Dfabric.addMods=${rusherLoaderJarPath}",
+				"-Dfabric.addMods=${rusherLoaderJarFile.absolutePath}",
 		)
 	}
 }
@@ -109,13 +98,12 @@ tasks.register("copyPluginToRunDir", Copy) {
 
 loom {
 	def accessWidenerFile = new File("build/tmp/${this.project.minecraft_version}/rusherhack.accesswidener")
-	if(accessWidenerFile.exists()) {
+	if (accessWidenerFile.exists()) {
 		accessWidenerPath = accessWidenerFile
 	} else {
 		println("RUSHERHACK ACCESS WIDENER NOT FOUND. Please run the 'updateAccessWidener' task.")
 	}
 
-	//disable run configs
 	runConfigs.configureEach {
 		ideConfigGenerated = false
 	}
@@ -128,10 +116,6 @@ java.targetCompatibility = JavaLanguageVersion.of(targetJavaVersion)
 java.toolchain.languageVersion.set(JavaLanguageVersion.of(targetJavaVersion))
 
 tasks.withType(JavaCompile).configureEach {
-	// ensure that the encoding is set to UTF-8, no matter what the system default is
-	// this fixes some edge cases with special characters not displaying correctly
-	// see http://yodaconditions.net/blog/fix-for-java-file-encoding-problems-with-gradle.html
-	// If Javadoc is generated, this must be specified in that task too.
 	it.options.encoding = "UTF-8"
 	it.options.release = Integer.parseInt(targetJavaVersion)
 }
@@ -142,14 +126,24 @@ processResources {
 	}
 }
 
+shadowJar {
+	archiveClassifier.set('')
+	configurations = [project.configurations.runtimeClasspath]
+	mergeServiceFiles()
+}
+
+remapJar {
+	dependsOn(shadowJar)
+	input.set(shadowJar.archiveFile)
+}
+
 jar {
+	duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 	manifest {
-		attributes(
-				"Minecraft-Version": project.minecraft_version
-		)
+		attributes('Minecraft-Version': project.minecraft_version)
 	}
 }
 
-//update access widener during intellij sync
+// IDE sync and launch config
 this.tasks.ideaSyncTask.dependsOn("updateAccessWidener")
 this.tasks.configureLaunch.dependsOn("updateAccessWidener")

@@ -10,8 +10,14 @@ import java.net.URI;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.logging.Logger;
+import java.util.logging.Level;
+import java.util.logging.ConsoleHandler;
+import java.util.logging.Formatter;
+import java.util.logging.LogRecord;
 
 public class ChatClient {
+    private static final Logger LOGGER = Logger.getLogger(ChatClient.class.getName());
     private final URI serverUri;
     private final java.util.function.Consumer<String> onReceive;
     private final Gson gson = new Gson();
@@ -20,6 +26,7 @@ public class ChatClient {
     private final AtomicBoolean connected = new AtomicBoolean(false);
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(2);
     private ScheduledFuture<?> reconnectTask;
+    private ScheduledFuture<?> pingTask;
 
     private final List<String> history = new LinkedList<>();
     private final Set<String> ignoredUsers = new HashSet<>();
@@ -30,8 +37,27 @@ public class ChatClient {
     private boolean showJoinMessage = true;
     private boolean showHistory = true;
 
+    static {
+        // Configure JUL programmatically
+        Logger logger = Logger.getLogger("garlicrot.rusherchat");
+        logger.setLevel(Level.FINE); // Enable detailed logging
+        logger.setUseParentHandlers(false); // Remove default handlers
+
+        ConsoleHandler handler = new ConsoleHandler();
+        handler.setLevel(Level.FINE);
+        handler.setFormatter(new Formatter() {
+            @Override
+            public String format(LogRecord record) {
+                return String.format("%tF %<tT [%s] %s - %s%s%n",
+                        record.getMillis(), record.getLevel(), record.getLoggerName(),
+                        record.getMessage(), record.getThrown() != null ? " " + record.getThrown() : "");
+            }
+        });
+        logger.addHandler(handler);
+    }
+
     public ChatClient(String host, int port, java.util.function.Consumer<String> onReceive) {
-        this.serverUri = URI.create("ws://" + host + ":" + port + "/");
+        this.serverUri = URI.create("wss://" + host + ":" + port + "/");
         this.onReceive = onReceive;
     }
 
@@ -42,7 +68,8 @@ public class ChatClient {
                 connected.set(true);
                 if (showJoinMessage) onReceive.accept("§7[System] Connected to chat server.");
                 if (showHistory) replayHistory();
-                System.out.println("[RusherChat] Connected to chat server.");
+                LOGGER.info("Connected to " + serverUri);
+                startPing();
             }
 
             @Override
@@ -61,14 +88,15 @@ public class ChatClient {
                     }
                     onReceive.accept(display);
                 } catch (JsonSyntaxException e) {
-                    System.err.println("[RusherChat] Invalid JSON: " + message);
+                    LOGGER.log(Level.SEVERE, "Invalid JSON: " + message, e);
                 }
             }
 
             @Override
             public void onClose(int code, String reason, boolean remote) {
                 connected.set(false);
-                onReceive.accept("§7[System] Disconnected.");
+                onReceive.accept("§7[System] Disconnected: " + reason + " (Code: " + code + ")");
+                stopPing();
                 if (autoReconnect) {
                     onReceive.accept("§7[System] Reconnecting...");
                     startReconnectLoop();
@@ -77,14 +105,15 @@ public class ChatClient {
 
             @Override
             public void onError(Exception ex) {
-                System.err.println("[RusherChat] WebSocket error: " + ex.getMessage());
+                LOGGER.log(Level.SEVERE, "WebSocket error", ex); // Replaced printStackTrace
             }
         };
 
         try {
+            LOGGER.info("Attempting to connect to " + serverUri);
             wsClient.connectBlocking();
         } catch (InterruptedException e) {
-            System.err.println("[RusherChat] WebSocket connection failed: " + e.getMessage());
+            LOGGER.log(Level.SEVERE, "WebSocket connection failed", e); // Replaced printStackTrace
         }
     }
 
@@ -96,6 +125,24 @@ public class ChatClient {
         }, 5, 5, TimeUnit.SECONDS);
     }
 
+    private void startPing() {
+        if (pingTask != null && !pingTask.isCancelled()) return;
+
+        pingTask = scheduler.scheduleAtFixedRate(() -> {
+            if (wsClient != null && wsClient.isOpen()) {
+                wsClient.send("ping");
+                LOGGER.fine("Sent ping to server");
+            }
+        }, 0, 30, TimeUnit.SECONDS);
+    }
+
+    private void stopPing() {
+        if (pingTask != null) {
+            pingTask.cancel(false);
+            pingTask = null;
+        }
+    }
+
     private void replayHistory() {
         synchronized (history) {
             for (String msg : history) onReceive.accept(msg);
@@ -103,7 +150,10 @@ public class ChatClient {
     }
 
     public void send(String content) {
-        if (wsClient == null || !wsClient.isOpen()) return;
+        if (wsClient == null || !wsClient.isOpen()) {
+            onReceive.accept("§7[System] Not connected to server.");
+            return;
+        }
 
         if (content.startsWith("/i ") || content.startsWith("/ignore ")) {
             String[] parts = content.split(" ", 2);
@@ -130,6 +180,7 @@ public class ChatClient {
 
     public void close() {
         connected.set(false);
+        stopPing();
         if (wsClient != null) wsClient.close();
         scheduler.shutdownNow();
     }
