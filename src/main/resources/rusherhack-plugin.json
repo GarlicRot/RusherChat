@@ -1,13 +1,24 @@
 {
-  "Plugin-Class": "org.example.ExamplePlugin",
+  "Plugin-Class": "garlicrot.rusherchat.RusherChatPlugin",
   "Name": "${project.plugin_name}",
   "Version": "${project.plugin_version}",
-  "Description": "Example rusherhack plugin",
-  "URL": "https://github.com/RusherDevelopment/example-plugin",
+  "Description": "A RusherHacks plugin for chatting with other users who have the plugin installed.",
+  "URL": "https://github.com/GarlicRot/RusherChat",
   "Authors": [
-    "John200410"
+    "John200410",
+    "GarlicRot"
   ],
   "Minecraft-Versions": [
-    "${project.minecraft_version}"
+    "1.20.1",
+    "1.20.2",
+    "1.20.3",
+    "1.20.4",
+    "1.20.5",
+    "1.20.6",
+    "1.21",
+    "1.21.1",
+    "1.21.2",
+    "1.21.3",
+    "1.21.4"
   ]
 }
