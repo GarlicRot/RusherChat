@@ -3,6 +3,23 @@
 All notable changes to **RusherChat** are documented here.
 
 ### 📅 2025-06-27
+- `Fix message display and add ignore functionality in ChatClient` – [`a9db614`](https://github.com/GarlicRot/RusherChat/commit/a9db614) by GarlicRot
+  - Resolved issue where messages were not showing in RusherChatWindow.
+
+---
+
+### 📅 
+- `` – [`- Implemented case-insensitive /ignore command to hide messages from specified users.`](https://github.com/GarlicRot/RusherChat/commit/- Implemented case-insensitive /ignore command to hide messages from specified users.) by 
+
+- `` – [`- Ensured compatibility with ChatServer broadcasting.`](https://github.com/GarlicRot/RusherChat/commit/- Ensured compatibility with ChatServer broadcasting.) by 
+
+- `` – [`- Cleaned up code with INFO-level logging for operational clarity.`](https://github.com/GarlicRot/RusherChat/commit/- Cleaned up code with INFO-level logging for operational clarity.) by 
+
+- `` – [``](https://github.com/GarlicRot/RusherChat/commit/) by 
+
+### 📅 2025-06-27
+- `docs(changelog): auto-update CHANGELOG.md` – [`90c6390`](https://github.com/GarlicRot/RusherChat/commit/90c6390) by github-actions[bot]
+
 - `Merge remote-tracking branch 'origin/master'` – [`c7f3487`](https://github.com/GarlicRot/RusherChat/commit/c7f3487) by GarlicRot
 
 - `Fix /ignore command filtering and enhance privacy in ChatClient` – [`fca7907`](https://github.com/GarlicRot/RusherChat/commit/fca7907) by GarlicRot
