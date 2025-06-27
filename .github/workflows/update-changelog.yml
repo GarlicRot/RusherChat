@@ -1,0 +1,63 @@
+name: Update Changelog
+
+on:
+  push:
+    branches: [master]
+
+jobs:
+  changelog:
+    name: Generate CHANGELOG
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Git
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git fetch --prune --unshallow || true
+
+      - name: Generate CHANGELOG.md
+        run: |
+          echo '# Changelog' > CHANGELOG.md
+          echo -e '\nAll notable changes to **${{ github.event.repository.name }}** are documented here.\n' >> CHANGELOG.md
+
+          git log --pretty=format:'%h%x1f%an%x1f%ad%x1f%s%x1f%b' --date=short | \
+          awk -F'\x1f' '
+            {
+              hash=$1;
+              author=$2;
+              date=$3;
+              subject=$4;
+              body=$5;
+
+              if (currentDate != date) {
+                if (currentDate != "") print "---\n";
+                print "### 📅 " date;
+                currentDate = date;
+              }
+
+              printf "- `%s` – [`%s`](https://github.com/${{ github.repository }}/commit/%s) by %s\n", subject, hash, hash, author;
+
+              # Print body as indented lines (if present)
+              if (length(body) > 1) {
+                n = split(body, lines, "\n");
+                for (i = 1; i <= n; i++) {
+                  if (length(lines[i]) > 0) {
+                    printf "  %s\n", lines[i];
+                  }
+                }
+              }
+              print "";
+            }
+          ' >> CHANGELOG.md
+
+      - name: Commit and push updated CHANGELOG.md
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add CHANGELOG.md
+          git commit -m "docs(changelog): auto-update CHANGELOG.md"
+          git push
+        continue-on-error: true
