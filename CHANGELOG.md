@@ -3,6 +3,30 @@
 All notable changes to **RusherChat** are documented here.
 
 ### 📅 2025-06-26
+- `Merge remote-tracking branch 'origin/master'` – [`c1a8f80`](https://github.com/GarlicRot/RusherChat/commit/c1a8f80) by GarlicRot
+
+- `feat: update RusherChat plugin to support static user color mapping` – [`a281251`](https://github.com/GarlicRot/RusherChat/commit/a281251) by GarlicRot
+  - Integrated static user color system for consistent display in chat
+
+---
+
+### 📅 
+- `` – [`- Updated ChatClient to reflect new color formatting from server`](https://github.com/GarlicRot/RusherChat/commit/- Updated ChatClient to reflect new color formatting from server) by 
+
+- `` – [`- Enhanced Message class handling for colored usernames`](https://github.com/GarlicRot/RusherChat/commit/- Enhanced Message class handling for colored usernames) by 
+
+- `` – [`- Improved RusherChatWindow message rendering to support color codes`](https://github.com/GarlicRot/RusherChat/commit/- Improved RusherChatWindow message rendering to support color codes) by 
+
+- `` – [`- Minor UI and logic adjustments in RusherChatModule and RusherChatPlugin`](https://github.com/GarlicRot/RusherChat/commit/- Minor UI and logic adjustments in RusherChatModule and RusherChatPlugin) by 
+
+- `` – [``](https://github.com/GarlicRot/RusherChat/commit/) by 
+
+### 📅 2025-06-27
+- `docs(changelog): auto-update CHANGELOG.md` – [`4c04f87`](https://github.com/GarlicRot/RusherChat/commit/4c04f87) by github-actions[bot]
+
+---
+
+### 📅 2025-06-26
 - `fix(workflow): update trigger to use master branch` – [`e62df13`](https://github.com/GarlicRot/RusherChat/commit/e62df13) by GarlicRot
   - Changed the GitHub Actions workflow trigger from `main` to `master`
 
