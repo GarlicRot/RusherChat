@@ -2,6 +2,34 @@
 
 All notable changes to **RusherChat** are documented here.
 
+### 📅 2025-06-27
+- `Merge remote-tracking branch 'origin/master'` – [`c7f3487`](https://github.com/GarlicRot/RusherChat/commit/c7f3487) by GarlicRot
+
+- `Fix /ignore command filtering and enhance privacy in ChatClient` – [`fca7907`](https://github.com/GarlicRot/RusherChat/commit/fca7907) by GarlicRot
+  - Standardized case handling in ignoredUsers and stripColor to ensure
+
+---
+
+### 📅 
+- `` – [`  consistent matching of usernames, fixing the issue where ignored`](https://github.com/GarlicRot/RusherChat/commit/  consistent matching of usernames, fixing the issue where ignored) by 
+
+- `` – [`  users' messages were still visible.`](https://github.com/GarlicRot/RusherChat/commit/  users' messages were still visible.) by 
+
+- `` – [`- Added logging in onMessage to debug ignored message filtering.`](https://github.com/GarlicRot/RusherChat/commit/- Added logging in onMessage to debug ignored message filtering.) by 
+
+- `` – [`- Ensured /ignore command feedback remains private to the issuing user`](https://github.com/GarlicRot/RusherChat/commit/- Ensured /ignore command feedback remains private to the issuing user) by 
+
+- `` – [`  using sendPrivate, maintaining the existing private command behavior.`](https://github.com/GarlicRot/RusherChat/commit/  using sendPrivate, maintaining the existing private command behavior.) by 
+
+- `` – [`- Updated documentation in method comments for clarity.`](https://github.com/GarlicRot/RusherChat/commit/- Updated documentation in method comments for clarity.) by 
+
+- `` – [``](https://github.com/GarlicRot/RusherChat/commit/) by 
+
+### 📅 2025-06-27
+- `docs(changelog): auto-update CHANGELOG.md` – [`dd10a0e`](https://github.com/GarlicRot/RusherChat/commit/dd10a0e) by github-actions[bot]
+
+---
+
 ### 📅 2025-06-26
 - `Merge remote-tracking branch 'origin/master'` – [`c1a8f80`](https://github.com/GarlicRot/RusherChat/commit/c1a8f80) by GarlicRot
 
