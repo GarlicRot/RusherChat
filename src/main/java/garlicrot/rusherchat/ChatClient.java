@@ -32,6 +32,7 @@ public class ChatClient {
     private ScheduledFuture<?> pingTask;
 
     private final Set<String> ignoredUsers = Collections.synchronizedSet(new HashSet<>()); // Stores lowercase usernames
+    private String lastWhisperer; // Tracks the last user who whispered
 
     private static final boolean AUTO_RECONNECT = true; // Hardcoded default
     private static final boolean SHOW_JOIN_MESSAGE = true; // Hardcoded default
@@ -83,8 +84,9 @@ public class ChatClient {
             @Override
             public void onOpen(ServerHandshake handshakedata) {
                 connected.set(true);
+                String username = Minecraft.getInstance().getUser().getName(); // Optional username
                 if (SHOW_JOIN_MESSAGE) onReceive.accept("§7[System] Connected to chat server.");
-                LOGGER.info("Connected to " + serverUri);
+                LOGGER.info("Connected to " + serverUri + " as " + username);
                 startPing();
             }
 
@@ -102,11 +104,30 @@ public class ChatClient {
                     if (ignoredUsers.contains(rawUsername)) return;
 
                     String coloredUsername = msg.getColoredUsername() != null ? msg.getColoredUsername() : rawUsername;
-                    String display = "[" + coloredUsername + "] " + (msg.getContent() != null ? msg.getContent() : "null");
-                    if (onReceive != null) {
-                        onReceive.accept(display);
+                    String content = msg.getContent() != null ? msg.getContent() : "null";
+                    String display;
+
+                    // Handle whispers
+                    if (msg.isWhisper()) {
+                        String currentUser = stripColor(Minecraft.getInstance().getUser().getName()).toLowerCase();
+                        display = (msg.getTarget() != null && msg.getTarget().toLowerCase().equals(currentUser))
+                                ? "§d[Whisper from " + coloredUsername + "] " + content
+                                : (rawUsername.equals(currentUser))
+                                ? "§d[Whisper to " + (msg.getTarget() != null ? msg.getTarget() : "Unknown") + "] " + content
+                                : null;
+                        if (display != null && onReceive != null) {
+                            onReceive.accept(display);
+                            if (msg.getTarget() != null && !msg.getTarget().toLowerCase().equals(currentUser)) {
+                                lastWhisperer = rawUsername; // Update last whisperer
+                            }
+                        }
                     } else {
-                        LOGGER.warning("onReceive callback is null, message not displayed: " + display);
+                        // Handle broadcasts
+                        display = "[" + coloredUsername + "] " + content;
+                        if (onReceive != null) {
+                            LOGGER.info("Received broadcast: " + display); // Debug log
+                            onReceive.accept(display);
+                        }
                     }
                 } catch (JsonSyntaxException e) {
                     LOGGER.log(Level.SEVERE, "Invalid JSON: " + message, e);
@@ -182,6 +203,8 @@ public class ChatClient {
             sendPrivate("§7[System] Not connected to server.");
             return;
         }
+        String username = Minecraft.getInstance().getUser().getName();
+        String rawUsername = stripColor(username).toLowerCase();
 
         if (content.startsWith("/i ") || content.startsWith("/ignore ")) {
             String[] parts = content.split(" ", 2);
@@ -189,7 +212,6 @@ public class ChatClient {
                 sendPrivate("§7[System] Usage: /ignore <username>");
                 return;
             }
-
             String target = parts[1].trim().toLowerCase();
             if (ignoredUsers.contains(target)) {
                 ignoredUsers.remove(target);
@@ -201,7 +223,37 @@ public class ChatClient {
             return;
         }
 
-        String username = Minecraft.getInstance().getUser().getName();
+        if (content.startsWith("/w ") || content.startsWith("/whisper ")) {
+            String[] parts = content.split(" ", 3);
+            if (parts.length < 3 || parts[1].trim().isEmpty() || parts[2].trim().isEmpty()) {
+                sendPrivate("§7[System] Usage: /w <username> <message>");
+                return;
+            }
+            String target = parts[1].trim();
+            String message = parts[2].trim();
+            Message msg = new Message(username, message, null, target, true);
+            wsClient.send(gson.toJson(msg));
+            LOGGER.info("Sent whisper to " + target + ": " + message);
+            return;
+        }
+
+        if (content.startsWith("/r ") || content.startsWith("/reply ")) {
+            String[] parts = content.split(" ", 2);
+            if (parts.length < 2 || parts[1].trim().isEmpty()) {
+                sendPrivate("§7[System] Usage: /r <message> (reply to last whisperer)");
+                return;
+            }
+            if (lastWhisperer == null) {
+                sendPrivate("§7[System] No recent whisperer to reply to.");
+                return;
+            }
+            String message = parts[1].trim();
+            Message msg = new Message(username, message, null, lastWhisperer, true);
+            wsClient.send(gson.toJson(msg));
+            LOGGER.info("Sent reply to " + lastWhisperer + ": " + message);
+            return;
+        }
+
         Message msg = new Message(username, content);
         wsClient.send(gson.toJson(msg));
         LOGGER.info("Sent message: " + content);
@@ -209,6 +261,7 @@ public class ChatClient {
 
     private void sendPrivate(String message) {
         if (onReceive != null) {
+            LOGGER.info("Sending private message: " + message); // Debug log
             onReceive.accept(message);
         } else {
             LOGGER.warning("onReceive callback is null, cannot send private message.");
