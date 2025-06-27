@@ -31,7 +31,7 @@ public class ChatClient {
     private ScheduledFuture<?> reconnectTask;
     private ScheduledFuture<?> pingTask;
 
-    private final Set<String> ignoredUsers = Collections.synchronizedSet(new HashSet<>());
+    private final Set<String> ignoredUsers = Collections.synchronizedSet(new HashSet<>()); // Stores lowercase usernames
 
     private static final boolean AUTO_RECONNECT = true; // Hardcoded default
     private static final boolean SHOW_JOIN_MESSAGE = true; // Hardcoded default
@@ -97,8 +97,11 @@ public class ChatClient {
 
                 try {
                     Message msg = gson.fromJson(message, Message.class);
-                    String rawUsername = stripColor(msg.getUsername());
-                    if (ignoredUsers.contains(rawUsername)) return;
+                    String rawUsername = stripColor(msg.getUsername()).toLowerCase(); // Normalize to lowercase
+                    if (ignoredUsers.contains(rawUsername)) {
+                        LOGGER.fine("Ignored message from " + rawUsername);
+                        return; // Skip displaying ignored user's message
+                    }
 
                     String display = "[" + msg.getColoredUsername() + "] " + msg.getContent();
                     onReceive.accept(display);
@@ -169,26 +172,30 @@ public class ChatClient {
         }
     }
 
+    /**
+     * Sends a message to the server or processes a command.
+     * Command feedback is sent privately to the local user.
+     */
     public void send(String content) {
         if (wsClient == null || !wsClient.isOpen()) {
-            onReceive.accept("§7[System] Not connected to server.");
+            sendPrivate("§7[System] Not connected to server.");
             return;
         }
 
         if (content.startsWith("/i ") || content.startsWith("/ignore ")) {
             String[] parts = content.split(" ", 2);
             if (parts.length < 2 || parts[1].trim().isEmpty()) {
-                onReceive.accept("§7[System] Usage: /ignore <username>");
+                sendPrivate("§7[System] Usage: /ignore <username>");
                 return;
             }
 
-            String target = parts[1].trim();
+            String target = parts[1].trim().toLowerCase(); // Normalize to lowercase
             if (ignoredUsers.contains(target)) {
                 ignoredUsers.remove(target);
-                onReceive.accept("§7[System] Unignored " + target);
+                sendPrivate("§7[System] Unignored " + parts[1]); // Display original case
             } else {
                 ignoredUsers.add(target);
-                onReceive.accept("§7[System] Now ignoring " + target);
+                sendPrivate("§7[System] Now ignoring " + parts[1]); // Display original case
             }
             return;
         }
@@ -197,6 +204,18 @@ public class ChatClient {
         Message msg = new Message(username, content);
         wsClient.send(gson.toJson(msg));
         LOGGER.fine("Sent message: " + content);
+    }
+
+    /**
+     * Sends a private message to the local user only, bypassing broadcast.
+     * This is intended for command feedback.
+     */
+    private void sendPrivate(String message) {
+        if (onReceive != null) {
+            onReceive.accept(message);
+        } else {
+            LOGGER.warning("onReceive callback is null, cannot send private message.");
+        }
     }
 
     public void close() {
@@ -223,6 +242,6 @@ public class ChatClient {
     }
 
     private String stripColor(String input) {
-        return input.replaceAll("§[0-9A-FK-ORa-fk-or]", "");
+        return input.replaceAll("§[0-9A-FK-ORa-fk-or]", "").toLowerCase(); // Normalize to lowercase
     }
 }
