@@ -3,6 +3,31 @@
 All notable changes to **RusherChat** are documented here.
 
 ### 📅 2025-06-27
+- `Merge remote-tracking branch 'origin/master'` – [`0702425`](https://github.com/GarlicRot/RusherChat/commit/0702425) by GarlicRot
+
+- `Fix whisper functionality in ChatClient` – [`0a77153`](https://github.com/GarlicRot/RusherChat/commit/0a77153) by GarlicRot
+  - Updated onMessage to filter and display whispers correctly:
+
+---
+
+### 📅 
+- `` – [`  - Show whispers only if they are to or from the current user.`](https://github.com/GarlicRot/RusherChat/commit/  - Show whispers only if they are to or from the current user.) by 
+
+- `` – [`  - Store lastWhisperer for replies when whispers are received.`](https://github.com/GarlicRot/RusherChat/commit/  - Store lastWhisperer for replies when whispers are received.) by 
+
+- `` – [`- Enhanced send method to handle whisper commands:`](https://github.com/GarlicRot/RusherChat/commit/- Enhanced send method to handle whisper commands:) by 
+
+- `` – [`  - Support /w and /whisper with target username and whisper flag.`](https://github.com/GarlicRot/RusherChat/commit/  - Support /w and /whisper with target username and whisper flag.) by 
+
+- `` – [`  - Added /r (reply) to respond to the last whisperer.`](https://github.com/GarlicRot/RusherChat/commit/  - Added /r (reply) to respond to the last whisperer.) by 
+
+- `` – [`- Improved privacy by checking whisper targets and sender.`](https://github.com/GarlicRot/RusherChat/commit/- Improved privacy by checking whisper targets and sender.) by 
+
+- `` – [``](https://github.com/GarlicRot/RusherChat/commit/) by 
+
+### 📅 2025-06-27
+- `docs(changelog): auto-update CHANGELOG.md` – [`1d1c72c`](https://github.com/GarlicRot/RusherChat/commit/1d1c72c) by github-actions[bot]
+
 - `Fix message display and add ignore functionality in ChatClient` – [`a9db614`](https://github.com/GarlicRot/RusherChat/commit/a9db614) by GarlicRot
   - Resolved issue where messages were not showing in RusherChatWindow.
 
