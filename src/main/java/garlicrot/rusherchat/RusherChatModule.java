@@ -3,7 +3,8 @@ package garlicrot.rusherchat;
 import org.rusherhack.client.api.RusherHackAPI;
 import org.rusherhack.client.api.feature.module.ModuleCategory;
 import org.rusherhack.client.api.feature.module.ToggleableModule;
-import org.rusherhack.core.setting.BooleanSetting;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.logging.Logger;
 import java.util.logging.Level;
 import java.util.logging.ConsoleHandler;
@@ -12,22 +13,20 @@ import java.util.logging.LogRecord;
 
 public class RusherChatModule extends ToggleableModule {
     private static final Logger LOGGER = Logger.getLogger(RusherChatModule.class.getName());
-
-    private final BooleanSetting autoReconnect = new BooleanSetting("Auto Reconnect", true);
-    private final BooleanSetting showJoinMessage = new BooleanSetting("Show Join Message", true);
-    private final BooleanSetting showHistory = new BooleanSetting("Show History", true);
+    private static RusherChatModule instance; // Singleton instance
 
     private RusherChatWindow chatWindow;
     private ChatClient chatClient;
+    private final List<String> messageQueue = new ArrayList<>(); // Queue for messages before window initialization
 
     static {
         // Configure JUL programmatically
         Logger logger = Logger.getLogger("garlicrot.rusherchat");
-        logger.setLevel(Level.FINE);
+        logger.setLevel(Level.INFO);
         logger.setUseParentHandlers(false);
 
         ConsoleHandler handler = new ConsoleHandler();
-        handler.setLevel(Level.FINE);
+        handler.setLevel(Level.INFO);
         handler.setFormatter(new Formatter() {
             @Override
             public String format(LogRecord record) {
@@ -39,24 +38,31 @@ public class RusherChatModule extends ToggleableModule {
         logger.addHandler(handler);
     }
 
-    public RusherChatModule() {
+    // Private constructor to enforce singleton
+    private RusherChatModule() {
         super("RusherChat", "Chat with other users running the plugin", ModuleCategory.MISC);
+        LOGGER.info("RusherChatModule instance created");
+    }
 
-        this.registerSettings(
-                autoReconnect,
-                showJoinMessage,
-                showHistory
-        );
+    // Singleton getter
+    public static synchronized RusherChatModule getInstance() {
+        if (instance == null) {
+            instance = new RusherChatModule();
+        } else {
+            LOGGER.info("Returning existing RusherChatModule instance");
+        }
+        return instance;
     }
 
     @Override
     public void onEnable() {
         LOGGER.info("Enabling RusherChat module");
-        chatClient = new ChatClient("rusherchatserver.fly.dev", 443, this::handleIncoming);
-        chatClient.setAutoReconnect(autoReconnect.getValue());
-        chatClient.setShowJoinMessage(showJoinMessage.getValue());
-        chatClient.setShowHistory(showHistory.getValue());
-        chatClient.connect();
+        if (chatClient == null) {
+            chatClient = ChatClient.getInstance("rusherchatserver.fly.dev", 443, this::handleIncoming);
+            chatClient.connect(); // Hardcoded connection without settings for now
+        } else {
+            LOGGER.info("ChatClient already initialized, skipping creation");
+        }
 
         if (chatWindow == null) {
             chatWindow = new RusherChatWindow(chatClient, this::handleSend);
@@ -65,6 +71,13 @@ public class RusherChatModule extends ToggleableModule {
         }
         chatWindow.setHidden(false);
         LOGGER.fine("RusherChat window shown");
+        // Process any queued messages after initialization
+        if (!messageQueue.isEmpty()) {
+            for (String msg : messageQueue) {
+                handleIncoming(msg);
+            }
+            messageQueue.clear();
+        }
     }
 
     @Override
@@ -76,6 +89,7 @@ public class RusherChatModule extends ToggleableModule {
         }
         if (chatClient != null) {
             chatClient.close();
+            chatClient = null; // Reset to allow reinitialization
             LOGGER.fine("ChatClient closed");
         }
     }
@@ -94,7 +108,8 @@ public class RusherChatModule extends ToggleableModule {
             chatWindow.addMessage(message);
             LOGGER.fine("Received message: " + message);
         } else {
-            LOGGER.warning("Cannot display message: ChatWindow is null");
+            LOGGER.warning("ChatWindow not initialized, queuing message: " + message);
+            messageQueue.add(message);
         }
     }
 }

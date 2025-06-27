@@ -7,7 +7,9 @@ import org.java_websocket.client.WebSocketClient;
 import org.java_websocket.handshake.ServerHandshake;
 
 import java.net.URI;
-import java.util.*;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Logger;
@@ -18,6 +20,7 @@ import java.util.logging.LogRecord;
 
 public class ChatClient {
     private static final Logger LOGGER = Logger.getLogger(ChatClient.class.getName());
+    private static ChatClient instance; // Singleton instance
     private final URI serverUri;
     private final java.util.function.Consumer<String> onReceive;
     private final Gson gson = new Gson();
@@ -28,23 +31,19 @@ public class ChatClient {
     private ScheduledFuture<?> reconnectTask;
     private ScheduledFuture<?> pingTask;
 
-    private final List<String> history = new LinkedList<>();
-    private final Set<String> ignoredUsers = new HashSet<>();
+    private final Set<String> ignoredUsers = Collections.synchronizedSet(new HashSet<>());
 
-    private static final int HISTORY_LIMIT = 50;
-
-    private boolean autoReconnect = true;
-    private boolean showJoinMessage = true;
-    private boolean showHistory = true;
+    private static final boolean AUTO_RECONNECT = true; // Hardcoded default
+    private static final boolean SHOW_JOIN_MESSAGE = true; // Hardcoded default
 
     static {
         // Configure JUL programmatically
         Logger logger = Logger.getLogger("garlicrot.rusherchat");
-        logger.setLevel(Level.FINE); // Enable detailed logging
-        logger.setUseParentHandlers(false); // Remove default handlers
+        logger.setLevel(Level.INFO);
+        logger.setUseParentHandlers(false);
 
         ConsoleHandler handler = new ConsoleHandler();
-        handler.setLevel(Level.FINE);
+        handler.setLevel(Level.INFO);
         handler.setFormatter(new Formatter() {
             @Override
             public String format(LogRecord record) {
@@ -56,18 +55,38 @@ public class ChatClient {
         logger.addHandler(handler);
     }
 
-    public ChatClient(String host, int port, java.util.function.Consumer<String> onReceive) {
+    // Private constructor to enforce singleton
+    private ChatClient(String host, int port, java.util.function.Consumer<String> onReceive) {
         this.serverUri = URI.create("wss://" + host + ":" + port + "/");
         this.onReceive = onReceive;
+        LOGGER.info("ChatClient instance created for " + serverUri);
+    }
+
+    // Singleton getter
+    public static synchronized ChatClient getInstance(String host, int port, java.util.function.Consumer<String> onReceive) {
+        if (instance == null) {
+            instance = new ChatClient(host, port, onReceive);
+        } else {
+            LOGGER.info("Returning existing ChatClient instance for " + instance.serverUri);
+        }
+        return instance;
     }
 
     public void connect() {
+        if (connected.get()) {
+            LOGGER.info("Already connected to " + serverUri + ", skipping connection attempt.");
+            return;
+        }
+        if (wsClient != null && wsClient.isOpen()) {
+            LOGGER.info("WebSocketClient already open for " + serverUri + ", skipping connection.");
+            return;
+        }
+
         wsClient = new WebSocketClient(serverUri) {
             @Override
             public void onOpen(ServerHandshake handshakedata) {
                 connected.set(true);
-                if (showJoinMessage) onReceive.accept("§7[System] Connected to chat server.");
-                if (showHistory) replayHistory();
+                if (SHOW_JOIN_MESSAGE) onReceive.accept("§7[System] Connected to chat server.");
                 LOGGER.info("Connected to " + serverUri);
                 startPing();
             }
@@ -81,11 +100,7 @@ public class ChatClient {
                     String rawUsername = stripColor(msg.getUsername());
                     if (ignoredUsers.contains(rawUsername)) return;
 
-                    String display = "[" + msg.getUsername() + "] " + msg.getContent();
-                    synchronized (history) {
-                        history.add(display);
-                        if (history.size() > HISTORY_LIMIT) history.remove(0);
-                    }
+                    String display = "[" + msg.getColoredUsername() + "] " + msg.getContent();
                     onReceive.accept(display);
                 } catch (JsonSyntaxException e) {
                     LOGGER.log(Level.SEVERE, "Invalid JSON: " + message, e);
@@ -97,7 +112,7 @@ public class ChatClient {
                 connected.set(false);
                 onReceive.accept("§7[System] Disconnected: " + reason + " (Code: " + code + ")");
                 stopPing();
-                if (autoReconnect) {
+                if (AUTO_RECONNECT) {
                     onReceive.accept("§7[System] Reconnecting...");
                     startReconnectLoop();
                 }
@@ -105,7 +120,7 @@ public class ChatClient {
 
             @Override
             public void onError(Exception ex) {
-                LOGGER.log(Level.SEVERE, "WebSocket error", ex); // Replaced printStackTrace
+                LOGGER.log(Level.SEVERE, "WebSocket error", ex);
             }
         };
 
@@ -113,20 +128,30 @@ public class ChatClient {
             LOGGER.info("Attempting to connect to " + serverUri);
             wsClient.connectBlocking();
         } catch (InterruptedException e) {
-            LOGGER.log(Level.SEVERE, "WebSocket connection failed", e); // Replaced printStackTrace
+            LOGGER.log(Level.SEVERE, "WebSocket connection failed", e);
+            Thread.currentThread().interrupt();
         }
     }
 
     private void startReconnectLoop() {
-        if (reconnectTask != null && !reconnectTask.isCancelled()) return;
+        if (reconnectTask != null && !reconnectTask.isCancelled()) {
+            LOGGER.info("Reconnect task already running, skipping.");
+            return;
+        }
 
         reconnectTask = scheduler.scheduleWithFixedDelay(() -> {
-            if (!connected.get()) connect();
+            if (!connected.get() && (wsClient == null || !wsClient.isOpen())) {
+                LOGGER.info("Attempting to reconnect to " + serverUri);
+                connect();
+            }
         }, 5, 5, TimeUnit.SECONDS);
     }
 
     private void startPing() {
-        if (pingTask != null && !pingTask.isCancelled()) return;
+        if (pingTask != null && !pingTask.isCancelled()) {
+            LOGGER.info("Ping task already running, skipping.");
+            return;
+        }
 
         pingTask = scheduler.scheduleAtFixedRate(() -> {
             if (wsClient != null && wsClient.isOpen()) {
@@ -140,12 +165,7 @@ public class ChatClient {
         if (pingTask != null) {
             pingTask.cancel(false);
             pingTask = null;
-        }
-    }
-
-    private void replayHistory() {
-        synchronized (history) {
-            for (String msg : history) onReceive.accept(msg);
+            LOGGER.info("Ping task stopped.");
         }
     }
 
@@ -176,29 +196,33 @@ public class ChatClient {
         String username = Minecraft.getInstance().getUser().getName();
         Message msg = new Message(username, content);
         wsClient.send(gson.toJson(msg));
+        LOGGER.fine("Sent message: " + content);
     }
 
     public void close() {
         connected.set(false);
         stopPing();
-        if (wsClient != null) wsClient.close();
-        scheduler.shutdownNow();
+        if (wsClient != null) {
+            wsClient.close();
+            wsClient = null;
+            LOGGER.info("WebSocketClient closed.");
+        }
+        try {
+            if (!scheduler.isShutdown()) {
+                scheduler.shutdown();
+                if (!scheduler.awaitTermination(5, TimeUnit.SECONDS)) {
+                    scheduler.shutdownNow();
+                }
+                LOGGER.info("Scheduler shut down.");
+            }
+        } catch (InterruptedException e) {
+            scheduler.shutdownNow();
+            LOGGER.log(Level.WARNING, "Scheduler shutdown interrupted", e);
+            Thread.currentThread().interrupt();
+        }
     }
 
     private String stripColor(String input) {
         return input.replaceAll("§[0-9A-FK-ORa-fk-or]", "");
-    }
-
-    // Setters
-    public void setAutoReconnect(boolean autoReconnect) {
-        this.autoReconnect = autoReconnect;
-    }
-
-    public void setShowJoinMessage(boolean showJoinMessage) {
-        this.showJoinMessage = showJoinMessage;
-    }
-
-    public void setShowHistory(boolean showHistory) {
-        this.showHistory = showHistory;
     }
 }

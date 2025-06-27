@@ -1,6 +1,5 @@
 package garlicrot.rusherchat;
 
-import net.minecraft.network.chat.Component;
 import org.rusherhack.client.api.feature.window.ResizeableWindow;
 import org.rusherhack.client.api.ui.window.content.ComboContent;
 import org.rusherhack.client.api.ui.window.content.component.ButtonComponent;
@@ -47,13 +46,12 @@ public class RusherChatWindow extends ResizeableWindow {
     }
 
     public void addMessage(String msg) {
-        // Interpret § formatting by using Component
-        Component component = Component.literal(msg);
-        this.messageView.add(component, 0xFFFFFF);
+        if (messageView == null) return;
+        messageView.add(msg, 0xFFFFFF); // Color value is fallback for plain text
     }
 
     @Override
     public WindowView getRootView() {
-        return this.tabView;
+        return tabView; // Return null if tabView is null
     }
 }
