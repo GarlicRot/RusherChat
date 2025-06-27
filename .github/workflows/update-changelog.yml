@@ -25,6 +25,13 @@ jobs:
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
+      - name: Debug Git log
+        run: |
+          echo "Listing recent commits:"
+          git log -n 10 --pretty=format:'%h %an %ad %s' --date=short
+          echo "Last CHANGELOG.md commit:"
+          git log -1 --pretty=%H -- CHANGELOG.md || echo "No CHANGELOG.md commits found"
+
       - name: Generate changelog entries
         run: |
           # Read existing CHANGELOG.md or create a new one
@@ -32,17 +39,26 @@ jobs:
             echo -e "# Changelog\n\nAll notable changes to **${{ github.event.repository.name }}** are documented here.\n\n## [Unreleased]\n- No unreleased changes at this time." > CHANGELOG.md
           fi
 
-          # Get the latest commits since the last changelog update
-          latest_commits=$(git log --pretty=format:'%h%x1f%an%x1f%ad%x1f%s%x1f%b' --date=short --since="$(git log -1 --pretty=%cd --date=short --grep='docs(changelog): auto-update CHANGELOG.md')" | grep -E '^(feat|fix|docs|chore|refactor|test|style)(\([^)]+\))?:')
+          # Get the hash of the last commit that modified CHANGELOG.md
+          last_changelog_commit=$(git log -1 --pretty=%H -- CHANGELOG.md || echo "")
+          if [ -z "$last_changelog_commit" ]; then
+            # If no changelog commit exists, get all commits
+            latest_commits=$(git log --pretty=format:'%h%x1f%an%x1f%ad%x1f%s%x1f%b' --date=short)
+          else
+            # Get commits since the last changelog update
+            latest_commits=$(git log $last_changelog_commit..HEAD --pretty=format:'%h%x1f%an%x1f%ad%x1f%s%x1f%b' --date=short)
+          fi
 
-          if [ -z "$latest_commits" ]; then
+          # Filter for meaningful commits (exclude merges and changelog updates)
+          filtered_commits=$(echo "$latest_commits" | grep -v -E '^Merge |^docs\(changelog\):')
+
+          if [ -z "$filtered_commits" ]; then
             echo "No new meaningful commits to add to changelog."
             exit 0
           fi
 
           # Prepare new entries for [Unreleased] section
-          new_entries=""
-          echo "$latest_commits" | awk -F'\x1f' '
+          echo "$filtered_commits" | awk -F'\x1f' '
             {
               hash=$1;
               author=$2;
@@ -50,7 +66,7 @@ jobs:
               subject=$4;
               body=$5;
 
-              # Skip merge commits and changelog commits
+              # Skip empty or irrelevant commits
               if (subject !~ /^Merge / && subject !~ /^docs\(changelog\):/) {
                 printf "- `%s` – [`%s`](https://github.com/${{ github.repository }}/commit/%s) by %s\n", subject, hash, hash, author;
                 if (length(body) > 1) {
@@ -66,14 +82,42 @@ jobs:
             }
           ' > new_entries.txt
 
+          # Debug: Show new entries
+          echo "New changelog entries:"
+          cat new_entries.txt
+
           # Insert new entries into CHANGELOG.md under [Unreleased]
           if [ -s new_entries.txt ]; then
             awk '
               BEGIN { printed = 0 }
-              /## \[Unreleased\]/ { print; print ""; system("cat new_entries.txt"); printed = 1; next }
-              printed == 0 && /^## \[[0-9]+\.[0-9]+\.[0-9]+\]/ { print "## [Unreleased]\n- No unreleased changes at this time."; printed = 1 }
+              /## \[Unreleased\]/ {
+                print;
+                print "";
+                system("cat new_entries.txt");
+                printed = 1;
+                next
+              }
+              /## \[Unreleased\]\n- No unreleased changes at this time./ {
+                print "## [Unreleased]";
+                print "";
+                system("cat new_entries.txt");
+                printed = 1;
+                next
+              }
+              printed == 0 && /^## \[[0-9]+\.[0-9]+\.[0-9]+\]/ {
+                print "## [Unreleased]";
+                print "";
+                system("cat new_entries.txt");
+                printed = 1
+              }
               { print }
-              END { if (printed == 0) print "## [Unreleased]\n- No unreleased changes at this time." }
+              END {
+                if (printed == 0) {
+                  print "## [Unreleased]";
+                  print "";
+                  system("cat new_entries.txt");
+                }
+              }
             ' CHANGELOG.md > CHANGELOG_temp.md
             mv CHANGELOG_temp.md CHANGELOG.md
           fi
