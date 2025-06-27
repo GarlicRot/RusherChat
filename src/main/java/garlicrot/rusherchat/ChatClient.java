@@ -32,7 +32,7 @@ public class ChatClient {
     private ScheduledFuture<?> pingTask;
 
     private final Set<String> ignoredUsers = Collections.synchronizedSet(new HashSet<>()); // Stores lowercase usernames
-    private String lastWhisperer; // Tracks the last user who whispered
+    private String lastWhisperer; // Tracks the last user who whispered to this user
 
     private static final boolean AUTO_RECONNECT = true; // Hardcoded default
     private static final boolean SHOW_JOIN_MESSAGE = true; // Hardcoded default
@@ -106,28 +106,27 @@ public class ChatClient {
                     String coloredUsername = msg.getColoredUsername() != null ? msg.getColoredUsername() : rawUsername;
                     String content = msg.getContent() != null ? msg.getContent() : "null";
                     String display;
+                    String currentUser = stripColor(Minecraft.getInstance().getUser().getName()).toLowerCase();
+
+                    // Update lastWhisperer when receiving a whisper
+                    if (msg.isWhisper() && msg.getTarget() != null && msg.getTarget().toLowerCase().equals(currentUser)) {
+                        lastWhisperer = rawUsername;
+                    }
 
                     // Handle whispers
                     if (msg.isWhisper()) {
-                        String currentUser = stripColor(Minecraft.getInstance().getUser().getName()).toLowerCase();
                         display = (msg.getTarget() != null && msg.getTarget().toLowerCase().equals(currentUser))
                                 ? "§d[Whisper from " + coloredUsername + "] " + content
                                 : (rawUsername.equals(currentUser))
                                 ? "§d[Whisper to " + (msg.getTarget() != null ? msg.getTarget() : "Unknown") + "] " + content
                                 : null;
-                        if (display != null && onReceive != null) {
-                            onReceive.accept(display);
-                            if (msg.getTarget() != null && !msg.getTarget().toLowerCase().equals(currentUser)) {
-                                lastWhisperer = rawUsername; // Update last whisperer
-                            }
-                        }
                     } else {
                         // Handle broadcasts
                         display = "[" + coloredUsername + "] " + content;
-                        if (onReceive != null) {
-                            LOGGER.info("Received broadcast: " + display); // Debug log
-                            onReceive.accept(display);
-                        }
+                    }
+
+                    if (display != null && onReceive != null) {
+                        onReceive.accept(display);
                     }
                 } catch (JsonSyntaxException e) {
                     LOGGER.log(Level.SEVERE, "Invalid JSON: " + message, e);
