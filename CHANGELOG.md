@@ -3,6 +3,25 @@
 All notable changes to **RusherChat** are documented here.
 
 ### 📅 2025-06-27
+- `Merge remote-tracking branch 'origin/master'` – [`71efc67`](https://github.com/GarlicRot/RusherChat/commit/71efc67) by GarlicRot
+
+- `fix(chat): implement proper tracking for /reply command with last whisperer` – [`a3a70af`](https://github.com/GarlicRot/RusherChat/commit/a3a70af) by GarlicRot
+  - Added lastWhisperer tracking to enable /reply functionality
+
+---
+
+### 📅 
+- `` – [`- Updated whisper handling to set lastWhisperer when receiving a private message`](https://github.com/GarlicRot/RusherChat/commit/- Updated whisper handling to set lastWhisperer when receiving a private message) by 
+
+- `` – [`- Improved /reply command parsing and error handling`](https://github.com/GarlicRot/RusherChat/commit/- Improved /reply command parsing and error handling) by 
+
+- `` – [`- Ensured private system messages are shown for usage guidance and errors`](https://github.com/GarlicRot/RusherChat/commit/- Ensured private system messages are shown for usage guidance and errors) by 
+
+- `` – [``](https://github.com/GarlicRot/RusherChat/commit/) by 
+
+### 📅 2025-06-27
+- `docs(changelog): auto-update CHANGELOG.md` – [`8f19e0c`](https://github.com/GarlicRot/RusherChat/commit/8f19e0c) by github-actions[bot]
+
 - `Merge remote-tracking branch 'origin/master'` – [`0702425`](https://github.com/GarlicRot/RusherChat/commit/0702425) by GarlicRot
 
 - `Fix whisper functionality in ChatClient` – [`0a77153`](https://github.com/GarlicRot/RusherChat/commit/0a77153) by GarlicRot
