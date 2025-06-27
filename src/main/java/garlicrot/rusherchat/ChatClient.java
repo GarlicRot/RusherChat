@@ -37,9 +37,8 @@ public class ChatClient {
     private static final boolean SHOW_JOIN_MESSAGE = true; // Hardcoded default
 
     static {
-        // Configure JUL programmatically
         Logger logger = Logger.getLogger("garlicrot.rusherchat");
-        logger.setLevel(Level.INFO);
+        logger.setLevel(Level.INFO); // Set to INFO for operational logs only
         logger.setUseParentHandlers(false);
 
         ConsoleHandler handler = new ConsoleHandler();
@@ -55,14 +54,12 @@ public class ChatClient {
         logger.addHandler(handler);
     }
 
-    // Private constructor to enforce singleton
     private ChatClient(String host, int port, java.util.function.Consumer<String> onReceive) {
         this.serverUri = URI.create("wss://" + host + ":" + port + "/");
         this.onReceive = onReceive;
         LOGGER.info("ChatClient instance created for " + serverUri);
     }
 
-    // Singleton getter
     public static synchronized ChatClient getInstance(String host, int port, java.util.function.Consumer<String> onReceive) {
         if (instance == null) {
             instance = new ChatClient(host, port, onReceive);
@@ -97,16 +94,24 @@ public class ChatClient {
 
                 try {
                     Message msg = gson.fromJson(message, Message.class);
-                    String rawUsername = stripColor(msg.getUsername()).toLowerCase(); // Normalize to lowercase
-                    if (ignoredUsers.contains(rawUsername)) {
-                        LOGGER.fine("Ignored message from " + rawUsername);
-                        return; // Skip displaying ignored user's message
+                    if (msg == null || msg.getUsername() == null) {
+                        LOGGER.warning("Parsed Message or username is null for: " + message);
+                        return;
                     }
+                    String rawUsername = stripColor(msg.getUsername()).toLowerCase();
+                    if (ignoredUsers.contains(rawUsername)) return;
 
-                    String display = "[" + msg.getColoredUsername() + "] " + msg.getContent();
-                    onReceive.accept(display);
+                    String coloredUsername = msg.getColoredUsername() != null ? msg.getColoredUsername() : rawUsername;
+                    String display = "[" + coloredUsername + "] " + (msg.getContent() != null ? msg.getContent() : "null");
+                    if (onReceive != null) {
+                        onReceive.accept(display);
+                    } else {
+                        LOGGER.warning("onReceive callback is null, message not displayed: " + display);
+                    }
                 } catch (JsonSyntaxException e) {
                     LOGGER.log(Level.SEVERE, "Invalid JSON: " + message, e);
+                } catch (Exception e) {
+                    LOGGER.log(Level.SEVERE, "Unexpected error processing message: " + message, e);
                 }
             }
 
@@ -114,6 +119,7 @@ public class ChatClient {
             public void onClose(int code, String reason, boolean remote) {
                 connected.set(false);
                 onReceive.accept("§7[System] Disconnected: " + reason + " (Code: " + code + ")");
+                LOGGER.info("Connection closed: Code " + code + ", Reason: " + reason);
                 stopPing();
                 if (AUTO_RECONNECT) {
                     onReceive.accept("§7[System] Reconnecting...");
@@ -159,7 +165,6 @@ public class ChatClient {
         pingTask = scheduler.scheduleAtFixedRate(() -> {
             if (wsClient != null && wsClient.isOpen()) {
                 wsClient.send("ping");
-                LOGGER.fine("Sent ping to server");
             }
         }, 0, 30, TimeUnit.SECONDS);
     }
@@ -172,10 +177,6 @@ public class ChatClient {
         }
     }
 
-    /**
-     * Sends a message to the server or processes a command.
-     * Command feedback is sent privately to the local user.
-     */
     public void send(String content) {
         if (wsClient == null || !wsClient.isOpen()) {
             sendPrivate("§7[System] Not connected to server.");
@@ -189,13 +190,13 @@ public class ChatClient {
                 return;
             }
 
-            String target = parts[1].trim().toLowerCase(); // Normalize to lowercase
+            String target = parts[1].trim().toLowerCase();
             if (ignoredUsers.contains(target)) {
                 ignoredUsers.remove(target);
-                sendPrivate("§7[System] Unignored " + parts[1]); // Display original case
+                sendPrivate("§7[System] Unignored " + parts[1]);
             } else {
                 ignoredUsers.add(target);
-                sendPrivate("§7[System] Now ignoring " + parts[1]); // Display original case
+                sendPrivate("§7[System] Now ignoring " + parts[1]);
             }
             return;
         }
@@ -203,13 +204,9 @@ public class ChatClient {
         String username = Minecraft.getInstance().getUser().getName();
         Message msg = new Message(username, content);
         wsClient.send(gson.toJson(msg));
-        LOGGER.fine("Sent message: " + content);
+        LOGGER.info("Sent message: " + content);
     }
 
-    /**
-     * Sends a private message to the local user only, bypassing broadcast.
-     * This is intended for command feedback.
-     */
     private void sendPrivate(String message) {
         if (onReceive != null) {
             onReceive.accept(message);
@@ -242,6 +239,6 @@ public class ChatClient {
     }
 
     private String stripColor(String input) {
-        return input.replaceAll("§[0-9A-FK-ORa-fk-or]", "").toLowerCase(); // Normalize to lowercase
+        return input != null ? input.replaceAll("§[0-9A-FK-ORa-fk-or]", "").toLowerCase() : "";
     }
 }
