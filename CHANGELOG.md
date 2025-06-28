@@ -3,30 +3,19 @@
 All notable changes to **RusherChat** are documented here.
 
 ## [Unreleased]
-
 - `docs: overhaul README to reflect command-based functionality` – [`8d49645`](https://github.com/GarlicRot/RusherChat/commit/8d49645) by GarlicRot
-  - - Updated subtitle to concise h3 header and removed "A RusherHacks Plugin".
-
-- `` – [`- Revised Overview to use "Minecraft version available to RusherHacks" and improve wording.`](https://github.com/GarlicRot/RusherChat/commit/- Revised Overview to use "Minecraft version available to RusherHacks" and improve wording.) by 
-
-- `` – [`- Updated Features to remove settings and add command-based control and color-coded usernames.`](https://github.com/GarlicRot/RusherChat/commit/- Updated Features to remove settings and add command-based control and color-coded usernames.) by 
-
-- `` – [`- Removed Settings section as module settings are no longer supported.`](https://github.com/GarlicRot/RusherChat/commit/- Removed Settings section as module settings are no longer supported.) by 
-
-- `` – [`- Added Commands section with /whisper, /w, /reply, /r, and /ignore.`](https://github.com/GarlicRot/RusherChat/commit/- Added Commands section with /whisper, /w, /reply, /r, and /ignore.) by 
-
-- `` – [`- Streamlined formatting by removing redundant separators and adjusting spacing.`](https://github.com/GarlicRot/RusherChat/commit/- Streamlined formatting by removing redundant separators and adjusting spacing.) by 
+  - Updated subtitle to concise h3 header and removed "A RusherHacks Plugin".
+  - Revised Overview to use "Minecraft version available to RusherHacks" and improve wording.
+  - Updated Features to remove settings and add command-based control and color-coded usernames.
+  - Removed Settings section as module settings are no longer supported.
+  - Added Commands section with /whisper, /w, /reply, /r, and /ignore.
+  - Streamlined formatting by removing redundant separators and adjusting spacing.
 
 - `chore(workflow): fix changelog auto-update to capture new commits` – [`f23425e`](https://github.com/GarlicRot/RusherChat/commit/f23425e) by GarlicRot
-  - - Updated GitHub Actions workflow to use last CHANGELOG.md commit hash instead of timestamp.
-
-- `` – [`- Removed strict conventional commit filter to include all non-merge, non-changelog commits.`](https://github.com/GarlicRot/RusherChat/commit/- Removed strict conventional commit filter to include all non-merge, non-changelog commits.) by 
-
-- `` – [`- Added debug output for recent commits and new changelog entries.`](https://github.com/GarlicRot/RusherChat/commit/- Added debug output for recent commits and new changelog entries.) by 
-
-- `` – [`- Ensured proper insertion of new entries under [Unreleased] section.`](https://github.com/GarlicRot/RusherChat/commit/- Ensured proper insertion of new entries under [Unreleased] section.) by 
-
-- No unreleased changes at this time.
+  - Updated GitHub Actions workflow to use last CHANGELOG.md commit hash instead of timestamp.
+  - Removed strict conventional commit filter to include all non-merge, non-changelog commits.
+  - Added debug output for recent commits and new changelog entries.
+  - Ensured proper insertion of new entries under [Unreleased] section.
 
 ## [1.0.5] - 2025-06-27
 - `fix(chat): implement proper tracking for /reply command` – [`a3a70af`](https://github.com/GarlicRot/RusherChat/commit/a3a70af) by GarlicRot
