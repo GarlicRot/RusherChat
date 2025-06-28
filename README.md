@@ -18,7 +18,6 @@ RusherChat allows users running the plugin to connect and chat across any Minecr
 
 ## Features
 
-- WebSocket connection to a centralized chat server hosted on `rusherchatserver.fly.dev:443`.
 - Global communication between RusherHacks users across supported Minecraft versions.
 - Dedicated chat window integrated into the RusherHacks interface.
 - Color-coded usernames for consistent and visually distinct chat display.
