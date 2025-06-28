@@ -3,9 +3,7 @@
 <h3 align="center">WebSocket-based global chat for users running the plugin</h3>
 
 <p align="center">
-  <a href="https://github.com/GarlicRot/RusherChat/releases/tag/v1.0.0">
-    <img src="https://img.shields.io/github/downloads/GarlicRot/RusherChat/v1.0.0/total?label=Downloads%20(v1.0.0)" alt="Downloads for v1.0.0">
-  </a>
+  <img src="https://img.shields.io/github/downloads/GarlicRot/RusherChat/total?label=Downloads" alt="GitHub Downloads (all assets, all releases)">
   <img src="https://img.shields.io/badge/Minecraft-1.20.1%20to%201.21.4-62b47a?style=flat&logo=minecraft&logoColor=white" alt="Minecraft Version">
   <img src="https://img.shields.io/badge/%F0%9F%A7%84-Approved%20%E2%9C%94%EF%B8%8F-blue?style=flat" alt="🧄 Approved ✔️">
 </p>
