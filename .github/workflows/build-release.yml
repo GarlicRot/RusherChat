@@ -7,6 +7,8 @@ jobs:
   build:
     name: Build RusherChat Plugin
     runs-on: ubuntu-24.04
+    outputs:
+      new_version: ${{ steps.set_version.outputs.new_version }}
 
     steps:
       - name: Check out master branch
@@ -19,6 +21,7 @@ jobs:
         run: chmod +x ./gradlew
 
       - name: Initialize or update plugin version in gradle.properties
+        id: set_version
         run: |
           git fetch --tags --force
           latest_tag=$(git describe --tags $(git rev-list --tags --max-count=1) || echo "v0.0.0")
@@ -36,7 +39,7 @@ jobs:
           git add gradle.properties
           git commit -m "chore: set plugin version to $new_version" || echo "No changes to commit"
           git push origin master
-          echo "NEW_VERSION=$new_version" >> $GITHUB_ENV
+          echo "new_version=$new_version" >> $GITHUB_OUTPUT
 
       - name: Verify Gradle Wrapper
         run: ./gradlew --version
@@ -61,8 +64,8 @@ jobs:
       - name: Rename and Upload artifact
         run: |
           jar_file=$(ls build/libs/RusherChat-*.jar | head -n 1)
-          if [ -f "$jar_file" ] && [ "$(basename "$jar_file")" != "RusherChat-${{ env.NEW_VERSION }}.jar" ]; then
-            mv "$jar_file" "build/libs/RusherChat-${{ env.NEW_VERSION }}.jar"
+          if [ -f "$jar_file" ] && [ "$(basename "$jar_file")" != "RusherChat-${{ steps.set_version.outputs.new_version }}.jar" ]; then
+            mv "$jar_file" "build/libs/RusherChat-${{ steps.set_version.outputs.new_version }}.jar"
           else
             echo "JAR already named correctly or not found: $jar_file"
           fi
@@ -71,7 +74,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: RusherChat
-          path: build/libs/RusherChat-${{ env.NEW_VERSION }}.jar
+          path: build/libs/RusherChat-${{ steps.set_version.outputs.new_version }}.jar
 
   release:
     needs: build
@@ -130,4 +133,4 @@ jobs:
           automatic_release_tag: "${{ env.NEW_TAG }}"
           prerelease: false
           title: "RusherChat ${{ env.NEW_TAG }}"
-          files: RusherChat/RusherChat-${{ env.NEW_VERSION }}.jar
+          files: RusherChat/RusherChat-${{ needs.build.outputs.new_version }}.jar
