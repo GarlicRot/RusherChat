@@ -27,8 +27,8 @@ jobs:
 
       - name: Debug Git log
         run: |
-          echo "Listing recent commits:"
-          git log -n 10 --pretty=format:'%h %an %ad %s' --date=short
+          echo "Listing recent commits (raw git log):"
+          git log -n 10 --pretty=format:'%h%x1f%an%x1f%ad%x1f%s%x1f%b' --date=short
           echo "Last CHANGELOG.md commit:"
           git log -1 --pretty=%H -- CHANGELOG.md || echo "No CHANGELOG.md commits found"
 
@@ -56,75 +56,3 @@ jobs:
             echo "No new meaningful commits to add to changelog."
             exit 0
           fi
-
-          # Prepare new entries for [Unreleased] section
-          echo "$filtered_commits" | awk -F'\x1f' '
-            {
-              hash=$1;
-              author=$2;
-              date=$3;
-              subject=$4;
-              body=$5;
-
-              # Skip empty or irrelevant commits
-              if (subject !~ /^Merge / && subject !~ /^docs\(changelog\):/) {
-                printf "- `%s` – [`%s`](https://github.com/${{ github.repository }}/commit/%s) by %s\n", subject, hash, hash, author;
-                if (length(body) > 1) {
-                  n = split(body, lines, "\n");
-                  for (i = 1; i <= n; i++) {
-                    if (length(lines[i]) > 0 && lines[i] !~ /^[[:space:]]*$/) {
-                      printf "  - %s\n", lines[i];
-                    }
-                  }
-                }
-                print "";
-              }
-            }
-          ' > new_entries.txt
-
-          # Debug: Show new entries
-          echo "New changelog entries:"
-          cat new_entries.txt
-
-          # Insert new entries into CHANGELOG.md under [Unreleased]
-          if [ -s new_entries.txt ]; then
-            awk '
-              BEGIN { printed = 0 }
-              /## \[Unreleased\]/ {
-                print;
-                print "";
-                system("cat new_entries.txt");
-                printed = 1;
-                next
-              }
-              /## \[Unreleased\]\n- No unreleased changes at this time./ {
-                print "## [Unreleased]";
-                print "";
-                system("cat new_entries.txt");
-                printed = 1;
-                next
-              }
-              printed == 0 && /^## \[[0-9]+\.[0-9]+\.[0-9]+\]/ {
-                print "## [Unreleased]";
-                print "";
-                system("cat new_entries.txt");
-                printed = 1
-              }
-              { print }
-              END {
-                if (printed == 0) {
-                  print "## [Unreleased]";
-                  print "";
-                  system("cat new_entries.txt");
-                }
-              }
-            ' CHANGELOG.md > CHANGELOG_temp.md
-            mv CHANGELOG_temp.md CHANGELOG.md
-          fi
-
-      - name: Commit and push updated CHANGELOG.md
-        run: |
-          git add CHANGELOG.md
-          git commit -m "docs(changelog): auto-update CHANGELOG.md with new commits"
-          git push
-        continue-on-error: true
