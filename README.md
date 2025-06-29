@@ -1,41 +1,35 @@
 <h1 align="center">RusherChat</h1>
 
-**A RusherHacks Plugin – WebSocket-based global chat between users running the plugin**
+<h3 align="center">WebSocket-based global chat for users running the plugin</h3>
 
 <p align="center">
-  <img src="https://img.shields.io/github/downloads/GarlicRot/RusherChat/total?label=Downloads" alt="Downloads">
+  <img src="https://img.shields.io/github/downloads/GarlicRot/RusherChat/total?label=Downloads" alt="GitHub Downloads (all assets, all releases)">
   <img src="https://img.shields.io/badge/Minecraft-1.20.1%20to%201.21.4-62b47a?style=flat&logo=minecraft&logoColor=white" alt="Minecraft Version">
   <img src="https://img.shields.io/badge/%F0%9F%A7%84-Approved%20%E2%9C%94%EF%B8%8F-blue?style=flat" alt="🧄 Approved ✔️">
 </p>
 
----
 
 ## Overview
 
-RusherChat enables users running the plugin to communicate across any Minecraft server using a shared WebSocket server. Messages are sent and received in real-time and displayed in a dedicated window.
+RusherChat allows users running the plugin to connect and chat across any Minecraft version available to RusherHacks through a shared WebSocket server. Messages are transmitted instantly and displayed in a dedicated chat window within the RusherHacks interface.
 
----
 
 ## Features
 
-- WebSocket connection to a centralized chat server
-- Cross-server communication between plugin users
-- Dedicated chat window integrated into the RusherHacks interface
-- Message history on join (up to 50 messages)
-- Optional join notifications
-- Reconnects automatically if disconnected
+- Global communication between RusherHacks users across supported Minecraft versions.
+- Dedicated chat window integrated into the RusherHacks interface.
+- Color-coded usernames for consistent and visually distinct chat display.
+- Command-based chat control for private messaging and user management.
 
----
 
-## Settings
+## Commands
 
-| Setting               | Description                                       |
-|-----------------------|---------------------------------------------------|
-| Auto Reconnect        | Automatically attempts to reconnect if dropped   |
-| Show Join Message     | Displays a message when a user joins the chat    |
-| Show History          | Loads previous messages when connecting          |
+| Command                              | Description                                                  |
+|--------------------------------------|--------------------------------------------------------------|
+| `/whisper` or `/w <username> <message>` | Sends a private message to the specified user.               |
+| `/reply` or `/r <message>`             | Sends a private message to the last user who whispered to you. |
+| `/ignore` or `/i <username>`           | Toggles ignoring messages from the specified user.           |
 
----
 
 ## Installation
 
@@ -44,13 +38,11 @@ RusherChat enables users running the plugin to communicate across any Minecraft 
 3. Launch Minecraft with RusherHacks installed.
 4. Enable the **RusherChat** module from the client interface.
 
----
 
 ## Changelog
 
 See [CHANGELOG.md](CHANGELOG.md) for version history and release notes.
 
----
 
 ## Issues
 
@@ -60,7 +52,6 @@ Use the issue tracker for bug reports and feature requests:
 - [Feature Request](https://github.com/GarlicRot/RusherChat/issues/new?template=feature_request.md)
 - [General Issue](https://github.com/GarlicRot/RusherChat/issues/new?template=custom_issue.md)
 
----
 
 ## License
 

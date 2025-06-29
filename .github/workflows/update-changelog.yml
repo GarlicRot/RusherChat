@@ -3,61 +3,56 @@ name: Update Changelog
 on:
   push:
     branches: [master]
+    paths:
+      - '**.java' # Trigger on Java file changes
+      - '**.md' # Trigger on Markdown changes (e.g., README)
+      - '!CHANGELOG.md' # Exclude changes to CHANGELOG.md itself
 
 jobs:
   changelog:
-    name: Generate CHANGELOG
+    name: Generate Changelog Entries
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetch full history for git log
 
       - name: Set up Git
         run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
-          git fetch --prune --unshallow || true
 
-      - name: Generate CHANGELOG.md
+      - name: Debug Git log
         run: |
-          echo '# Changelog' > CHANGELOG.md
-          echo -e '\nAll notable changes to **${{ github.event.repository.name }}** are documented here.\n' >> CHANGELOG.md
+          echo "Listing recent commits (raw git log):"
+          git log -n 10 --pretty=format:'%h%x1f%an%x1f%ad%x1f%s%x1f%b' --date=short
+          echo "Last CHANGELOG.md commit:"
+          git log -1 --pretty=%H -- CHANGELOG.md || echo "No CHANGELOG.md commits found"
 
-          git log --pretty=format:'%h%x1f%an%x1f%ad%x1f%s%x1f%b' --date=short | \
-          awk -F'\x1f' '
-            {
-              hash=$1;
-              author=$2;
-              date=$3;
-              subject=$4;
-              body=$5;
-
-              if (currentDate != date) {
-                if (currentDate != "") print "---\n";
-                print "### 📅 " date;
-                currentDate = date;
-              }
-
-              printf "- `%s` – [`%s`](https://github.com/${{ github.repository }}/commit/%s) by %s\n", subject, hash, hash, author;
-
-              # Print body as indented lines (if present)
-              if (length(body) > 1) {
-                n = split(body, lines, "\n");
-                for (i = 1; i <= n; i++) {
-                  if (length(lines[i]) > 0) {
-                    printf "  %s\n", lines[i];
-                  }
-                }
-              }
-              print "";
-            }
-          ' >> CHANGELOG.md
-
-      - name: Commit and push updated CHANGELOG.md
+      - name: Generate changelog entries
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add CHANGELOG.md
-          git commit -m "docs(changelog): auto-update CHANGELOG.md"
-          git push
-        continue-on-error: true
+          # Read existing CHANGELOG.md or create a new one
+          if [ ! -f CHANGELOG.md ]; then
+            echo -e "# Changelog\n\nAll notable changes to **${{ github.event.repository.name }}** are documented here.\n\n## [Unreleased]\n- No unreleased changes at this time." > CHANGELOG.md
+          fi
+
+          # Get the hash of the last commit that modified CHANGELOG.md
+          last_changelog_commit=$(git log -1 --pretty=%H -- CHANGELOG.md || echo "")
+          if [ -z "$last_changelog_commit" ]; then
+            # If no changelog commit exists, get all commits
+            latest_commits=$(git log --pretty=format:'%h%x1f%an%x1f%ad%x1f%s%x1f%b' --date=short)
+          else
+            # Get commits since the last changelog update
+            latest_commits=$(git log $last_changelog_commit..HEAD --pretty=format:'%h%x1f%an%x1f%ad%x1f%s%x1f%b' --date=short)
+          fi
+
+          # Filter for meaningful commits (exclude merges and changelog updates)
+          filtered_commits=$(echo "$latest_commits" | grep -v -E '^Merge |^docs\(changelog\):')
+
+          if [ -z "$filtered_commits" ]; then
+            echo "No new meaningful commits to add to changelog."
+            exit 0
+          fi
