@@ -30,6 +30,8 @@ RusherChat allows users running the plugin to connect and chat across any Minecr
 | `/reply` or `/r <message>`             | Sends a private message to the last user who whispered to you. |
 | `/ignore` or `/i <username>`           | Toggles ignoring messages from the specified user.           |
 
+> [!WARNING]
+> Whisper messages are not end-to-end encrypted. Do **not** share passwords, IPs, coordinates, or any sensitive information through whispers.
 
 ## Installation
 
