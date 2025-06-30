@@ -58,8 +58,8 @@ public class RusherChatModule extends ToggleableModule {
     public void onEnable() {
         LOGGER.info("Enabling RusherChat module");
         if (chatClient == null) {
-            chatClient = ChatClient.getInstance("rusherchatserver.fly.dev", 443, this::handleIncoming);
-            chatClient.connect(); // Hardcoded connection without settings for now
+            chatClient = new ChatClient("rusherchatserver.fly.dev", 443, this::handleIncoming);
+            chatClient.connect();
         } else {
             LOGGER.info("ChatClient already initialized, skipping creation");
         }

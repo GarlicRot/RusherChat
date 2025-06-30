@@ -28,7 +28,6 @@ public class RusherChatWindow extends ResizeableWindow {
             String input = inputField.getValue().trim();
             if (!input.isEmpty()) {
                 onSend.accept(input);
-                addMessage("§7[You] " + input);
                 inputField.setValue("");
             }
         });

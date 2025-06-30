@@ -12,15 +12,14 @@ import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.logging.Logger;
-import java.util.logging.Level;
-import java.util.logging.ConsoleHandler;
-import java.util.logging.Formatter;
-import java.util.logging.LogRecord;
+import java.util.logging.*;
 
 public class ChatClient {
     private static final Logger LOGGER = Logger.getLogger(ChatClient.class.getName());
-    private static ChatClient instance; // Singleton instance
+    private static final int MAX_MESSAGE_LENGTH = 256;
+    private static final boolean AUTO_RECONNECT = true;
+    private static final boolean SHOW_JOIN_MESSAGE = true;
+
     private final URI serverUri;
     private final java.util.function.Consumer<String> onReceive;
     private final Gson gson = new Gson();
@@ -31,13 +30,10 @@ public class ChatClient {
     private ScheduledFuture<?> reconnectTask;
     private ScheduledFuture<?> pingTask;
 
-    private final Set<String> ignoredUsers = Collections.synchronizedSet(new HashSet<>()); // Stores lowercase usernames
-
-    private static final boolean AUTO_RECONNECT = true; // Hardcoded default
-    private static final boolean SHOW_JOIN_MESSAGE = true; // Hardcoded default
+    private final Set<String> ignoredUsers = Collections.synchronizedSet(new HashSet<>());
+    private long lastSendTime = 0;
 
     static {
-        // Configure JUL programmatically
         Logger logger = Logger.getLogger("garlicrot.rusherchat");
         logger.setLevel(Level.INFO);
         logger.setUseParentHandlers(false);
@@ -55,32 +51,14 @@ public class ChatClient {
         logger.addHandler(handler);
     }
 
-    // Private constructor to enforce singleton
-    private ChatClient(String host, int port, java.util.function.Consumer<String> onReceive) {
+    public ChatClient(String host, int port, java.util.function.Consumer<String> onReceive) {
         this.serverUri = URI.create("wss://" + host + ":" + port + "/");
         this.onReceive = onReceive;
         LOGGER.info("ChatClient instance created for " + serverUri);
     }
 
-    // Singleton getter
-    public static synchronized ChatClient getInstance(String host, int port, java.util.function.Consumer<String> onReceive) {
-        if (instance == null) {
-            instance = new ChatClient(host, port, onReceive);
-        } else {
-            LOGGER.info("Returning existing ChatClient instance for " + instance.serverUri);
-        }
-        return instance;
-    }
-
     public void connect() {
-        if (connected.get()) {
-            LOGGER.info("Already connected to " + serverUri + ", skipping connection attempt.");
-            return;
-        }
-        if (wsClient != null && wsClient.isOpen()) {
-            LOGGER.info("WebSocketClient already open for " + serverUri + ", skipping connection.");
-            return;
-        }
+        if (connected.get() || (wsClient != null && wsClient.isOpen())) return;
 
         wsClient = new WebSocketClient(serverUri) {
             @Override
@@ -97,14 +75,13 @@ public class ChatClient {
 
                 try {
                     Message msg = gson.fromJson(message, Message.class);
-                    String rawUsername = stripColor(msg.getUsername()).toLowerCase(); // Normalize to lowercase
-                    if (ignoredUsers.contains(rawUsername)) {
-                        LOGGER.fine("Ignored message from " + rawUsername);
-                        return; // Skip displaying ignored user's message
-                    }
+                    String content = msg.getContent();
+                    if (content == null || content.trim().isEmpty()) return;
 
-                    String display = "[" + msg.getColoredUsername() + "] " + msg.getContent();
-                    onReceive.accept(display);
+                    String rawUsername = stripColor(msg.getUsername()).toLowerCase();
+                    if (ignoredUsers.contains(rawUsername)) return;
+
+                    onReceive.accept(formatDisplayMessage(msg));
                 } catch (JsonSyntaxException e) {
                     LOGGER.log(Level.SEVERE, "Invalid JSON: " + message, e);
                 }
@@ -136,46 +113,6 @@ public class ChatClient {
         }
     }
 
-    private void startReconnectLoop() {
-        if (reconnectTask != null && !reconnectTask.isCancelled()) {
-            LOGGER.info("Reconnect task already running, skipping.");
-            return;
-        }
-
-        reconnectTask = scheduler.scheduleWithFixedDelay(() -> {
-            if (!connected.get() && (wsClient == null || !wsClient.isOpen())) {
-                LOGGER.info("Attempting to reconnect to " + serverUri);
-                connect();
-            }
-        }, 5, 5, TimeUnit.SECONDS);
-    }
-
-    private void startPing() {
-        if (pingTask != null && !pingTask.isCancelled()) {
-            LOGGER.info("Ping task already running, skipping.");
-            return;
-        }
-
-        pingTask = scheduler.scheduleAtFixedRate(() -> {
-            if (wsClient != null && wsClient.isOpen()) {
-                wsClient.send("ping");
-                LOGGER.fine("Sent ping to server");
-            }
-        }, 0, 30, TimeUnit.SECONDS);
-    }
-
-    private void stopPing() {
-        if (pingTask != null) {
-            pingTask.cancel(false);
-            pingTask = null;
-            LOGGER.info("Ping task stopped.");
-        }
-    }
-
-    /**
-     * Sends a message to the server or processes a command.
-     * Command feedback is sent privately to the local user.
-     */
     public void send(String content) {
         if (wsClient == null || !wsClient.isOpen()) {
             sendPrivate("§7[System] Not connected to server.");
@@ -189,16 +126,28 @@ public class ChatClient {
                 return;
             }
 
-            String target = parts[1].trim().toLowerCase(); // Normalize to lowercase
+            String target = parts[1].trim().toLowerCase();
             if (ignoredUsers.contains(target)) {
                 ignoredUsers.remove(target);
-                sendPrivate("§7[System] Unignored " + parts[1]); // Display original case
+                sendPrivate("§7[System] Unignored " + parts[1]);
             } else {
                 ignoredUsers.add(target);
-                sendPrivate("§7[System] Now ignoring " + parts[1]); // Display original case
+                sendPrivate("§7[System] Now ignoring " + parts[1]);
             }
             return;
         }
+
+        if (content.length() > MAX_MESSAGE_LENGTH) {
+            sendPrivate("§7[System] Message too long. Max " + MAX_MESSAGE_LENGTH + " characters.");
+            return;
+        }
+
+        long now = System.currentTimeMillis();
+        if (now - lastSendTime < 1000) {
+            sendPrivate("§7[System] You are sending messages too quickly. Please slow down.");
+            return;
+        }
+        lastSendTime = now;
 
         String username = Minecraft.getInstance().getUser().getName();
         Message msg = new Message(username, content);
@@ -206,15 +155,9 @@ public class ChatClient {
         LOGGER.fine("Sent message: " + content);
     }
 
-    /**
-     * Sends a private message to the local user only, bypassing broadcast.
-     * This is intended for command feedback.
-     */
     private void sendPrivate(String message) {
         if (onReceive != null) {
             onReceive.accept(message);
-        } else {
-            LOGGER.warning("onReceive callback is null, cannot send private message.");
         }
     }
 
@@ -232,16 +175,54 @@ public class ChatClient {
                 if (!scheduler.awaitTermination(5, TimeUnit.SECONDS)) {
                     scheduler.shutdownNow();
                 }
-                LOGGER.info("Scheduler shut down.");
             }
         } catch (InterruptedException e) {
             scheduler.shutdownNow();
-            LOGGER.log(Level.WARNING, "Scheduler shutdown interrupted", e);
             Thread.currentThread().interrupt();
         }
     }
 
+    private void startReconnectLoop() {
+        if (reconnectTask != null && !reconnectTask.isCancelled()) return;
+
+        reconnectTask = scheduler.scheduleWithFixedDelay(() -> {
+            if (!connected.get() && (wsClient == null || !wsClient.isOpen())) connect();
+        }, 5, 5, TimeUnit.SECONDS);
+    }
+
+    private void startPing() {
+        if (pingTask != null && !pingTask.isCancelled()) return;
+
+        pingTask = scheduler.scheduleAtFixedRate(() -> {
+            if (wsClient != null && wsClient.isOpen()) {
+                wsClient.send("ping");
+            }
+        }, 0, 30, TimeUnit.SECONDS);
+    }
+
+    private void stopPing() {
+        if (pingTask != null) {
+            pingTask.cancel(false);
+            pingTask = null;
+        }
+    }
+
+    private String formatDisplayMessage(Message msg) {
+        String content = msg.getContent();
+        String usernameDisplay = msg.getColoredUsername() != null ? msg.getColoredUsername() : msg.getUsername();
+
+        if (usernameDisplay.contains("[Whisper ->]")) {
+            return "§5" + usernameDisplay + ": " + content;
+        } else if (usernameDisplay.contains("[Whisper]")) {
+            return "§d" + usernameDisplay + ": " + content;
+        } else if (usernameDisplay.contains("[System]")) {
+            return "§7" + content;
+        } else {
+            return usernameDisplay + ": " + content;
+        }
+    }
+
     private String stripColor(String input) {
-        return input.replaceAll("§[0-9A-FK-ORa-fk-or]", "").toLowerCase(); // Normalize to lowercase
+        return input.replaceAll("§[0-9A-FK-ORa-fk-or]", "").toLowerCase();
     }
 }
