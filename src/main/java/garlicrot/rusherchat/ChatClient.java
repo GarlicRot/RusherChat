@@ -43,16 +43,21 @@ public class ChatClient {
         handler.setFormatter(new Formatter() {
             @Override
             public String format(LogRecord record) {
-                return String.format("%tF %<tT [%s] %s - %s%s%n",
-                        record.getMillis(), record.getLevel(), record.getLoggerName(),
-                        record.getMessage(), record.getThrown() != null ? " " + record.getThrown() : "");
+                return String.format(
+                        "%tF %<tT [%s] %s - %s%s%n",
+                        record.getMillis(),
+                        record.getLevel(),
+                        record.getLoggerName(),
+                        record.getMessage(),
+                        record.getThrown() != null ? " " + record.getThrown() : ""
+                );
             }
         });
         logger.addHandler(handler);
     }
 
     public ChatClient(String host, int port, java.util.function.Consumer<String> onReceive) {
-        this.serverUri = URI.create("wss://" + host + ":" + port + "/");
+        this.serverUri = URI.create("ws://" + host + ":" + port + "/");
         this.onReceive = onReceive;
         LOGGER.info("ChatClient instance created for " + serverUri);
     }
@@ -64,7 +69,9 @@ public class ChatClient {
             @Override
             public void onOpen(ServerHandshake handshakedata) {
                 connected.set(true);
-                if (SHOW_JOIN_MESSAGE) onReceive.accept("§7[System] Connected to chat server.");
+                if (SHOW_JOIN_MESSAGE) {
+                    onReceive.accept("§7[System] Connected to chat server.");
+                }
                 LOGGER.info("Connected to " + serverUri);
                 startPing();
             }
@@ -186,7 +193,9 @@ public class ChatClient {
         if (reconnectTask != null && !reconnectTask.isCancelled()) return;
 
         reconnectTask = scheduler.scheduleWithFixedDelay(() -> {
-            if (!connected.get() && (wsClient == null || !wsClient.isOpen())) connect();
+            if (!connected.get() && (wsClient == null || !wsClient.isOpen())) {
+                connect();
+            }
         }, 5, 5, TimeUnit.SECONDS);
     }
 
@@ -209,7 +218,9 @@ public class ChatClient {
 
     private String formatDisplayMessage(Message msg) {
         String content = msg.getContent();
-        String usernameDisplay = msg.getColoredUsername() != null ? msg.getColoredUsername() : msg.getUsername();
+        String usernameDisplay = msg.getColoredUsername() != null
+                ? msg.getColoredUsername()
+                : msg.getUsername();
 
         if (usernameDisplay.contains("[Whisper ->]")) {
             return "§5" + usernameDisplay + ": " + content;
