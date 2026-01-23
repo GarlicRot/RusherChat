@@ -1,38 +1,51 @@
 package garlicrot.rusherchat;
 
 public class Message {
-    private final String username;
-    private final String content;
-    private final String coloredUsername;
-    private final String target;
-    private final boolean whisper;
 
-    // Required for Gson deserialization
+    public enum Type {
+        LOGIN,
+        CHAT,
+        SYSTEM,
+        WHISPER
+    }
+
+    private Type type;
+    private String username;
+    private String content;
+    private String coloredUsername;
+    private String target;
+    private boolean whisper;
+
     public Message() {
-        this.username = null;
-        this.content = null;
-        this.coloredUsername = null;
-        this.target = null;
-        this.whisper = false;
     }
 
     public Message(String username, String content) {
-        this.username = username;
-        this.content = content;
-        this.coloredUsername = null;
-        this.target = null;
-        this.whisper = false;
+        this(Type.CHAT, username, content, null, null, false);
     }
 
     public Message(String username, String content, String coloredUsername) {
-        this.username = username;
-        this.content = content;
-        this.coloredUsername = coloredUsername;
-        this.target = null;
-        this.whisper = false;
+        this(Type.CHAT, username, content, coloredUsername, null, false);
     }
 
-    public Message(String username, String content, String coloredUsername, String target, boolean whisper) {
+    public Message(String username,
+                   String content,
+                   String coloredUsername,
+                   String target,
+                   boolean whisper) {
+        this(Type.CHAT, username, content, coloredUsername, target, whisper);
+    }
+
+    public Message(Type type, String username, String content) {
+        this(type, username, content, null, null, false);
+    }
+
+    public Message(Type type,
+                   String username,
+                   String content,
+                   String coloredUsername,
+                   String target,
+                   boolean whisper) {
+        this.type = (type != null ? type : Type.CHAT);
         this.username = username;
         this.content = content;
         this.coloredUsername = coloredUsername;
@@ -40,12 +53,33 @@ public class Message {
         this.whisper = whisper;
     }
 
-    public String getUsername() { return username; }
-    public String getContent() { return content; }
-    public String getColoredUsername() { return coloredUsername != null ? coloredUsername : username; }
-    public String getTarget() { return target; }
-    public String getTargetColored() { return target; }
-    public boolean isWhisper() { return whisper; }
+    public Type getType() {
+        return type != null ? type : Type.CHAT;
+    }
+
+    public String getUsername() {
+        return username;
+    }
+
+    public String getContent() {
+        return content;
+    }
+
+    public String getColoredUsername() {
+        return coloredUsername != null ? coloredUsername : username;
+    }
+
+    public String getTarget() {
+        return target;
+    }
+
+    public String getTargetColored() {
+        return target;
+    }
+
+    public boolean isWhisper() {
+        return whisper;
+    }
 
     @Override
     public String toString() {

@@ -69,10 +69,15 @@ public class ChatClient {
             @Override
             public void onOpen(ServerHandshake handshakedata) {
                 connected.set(true);
+
+                String username = Minecraft.getInstance().getUser().getName();
+                Message login = new Message(Message.Type.LOGIN, username, null, null, null, false);
+                wsClient.send(gson.toJson(login));
+
                 if (SHOW_JOIN_MESSAGE) {
                     onReceive.accept("§7[System] Connected to chat server.");
                 }
-                LOGGER.info("Connected to " + serverUri);
+                LOGGER.info("Connected to " + serverUri + " as " + username);
                 startPing();
             }
 
@@ -157,7 +162,7 @@ public class ChatClient {
         lastSendTime = now;
 
         String username = Minecraft.getInstance().getUser().getName();
-        Message msg = new Message(username, content);
+        Message msg = new Message(Message.Type.CHAT, username, content);
         wsClient.send(gson.toJson(msg));
         LOGGER.fine("Sent message: " + content);
     }
