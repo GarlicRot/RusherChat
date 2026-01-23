@@ -9,10 +9,10 @@ import org.java_websocket.handshake.ServerHandshake;
 import javax.crypto.Cipher;
 import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
+import javax.net.ssl.SSLContext;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import java.security.SecureRandom;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.HashSet;
@@ -30,7 +30,6 @@ public class ChatClient {
 
     // Must match server secret!
     private static final String WHISPER_SECRET = "rusherchat-whisper-key-01";
-    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     private static SecretKeySpec WHISPER_KEY;
 
     private final URI serverUri;
@@ -70,7 +69,14 @@ public class ChatClient {
     }
 
     public ChatClient(String host, int port, java.util.function.Consumer<String> onReceive) {
-        this.serverUri = URI.create("ws://" + host + ":" + port + "/");
+        // If host is already a full ws/wss URL, use it directly (e.g. wss://rusherchat.smokelog.org)
+        if (host.startsWith("ws://") || host.startsWith("wss://")) {
+            this.serverUri = URI.create(host);
+        } else {
+            // Legacy style: host + port
+            this.serverUri = URI.create("ws://" + host + ":" + port + "/");
+        }
+
         this.onReceive = onReceive;
         LOGGER.info("ChatClient instance created for " + serverUri);
     }
@@ -88,6 +94,10 @@ public class ChatClient {
 
     private static String decryptWhisper(String cipherTextB64) throws Exception {
         byte[] combined = Base64.getDecoder().decode(cipherTextB64);
+        if (combined.length < 13) {
+            throw new IllegalArgumentException("Whisper payload too short");
+        }
+
         byte[] iv = Arrays.copyOfRange(combined, 0, 12);
         byte[] cipherBytes = Arrays.copyOfRange(combined, 12, combined.length);
 
@@ -164,6 +174,18 @@ public class ChatClient {
                 LOGGER.log(Level.SEVERE, "WebSocket error", ex);
             }
         };
+
+        // Enable TLS for wss:// connections
+        if ("wss".equalsIgnoreCase(serverUri.getScheme())) {
+            try {
+                SSLContext sslContext = SSLContext.getInstance("TLS");
+                sslContext.init(null, null, null);
+                wsClient.setSocketFactory(sslContext.getSocketFactory());
+                LOGGER.info("SSL context configured for WSS connection.");
+            } catch (Exception e) {
+                LOGGER.log(Level.SEVERE, "Failed to set up SSL for WSS connection", e);
+            }
+        }
 
         try {
             LOGGER.info("Attempting to connect to " + serverUri);
