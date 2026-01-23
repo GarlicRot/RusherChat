@@ -6,25 +6,20 @@ import org.rusherhack.client.api.feature.module.ToggleableModule;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.logging.Logger;
-import java.util.logging.Level;
-import java.util.logging.ConsoleHandler;
-import java.util.logging.Formatter;
-import java.util.logging.LogRecord;
+import java.util.logging.*;
 
 public class RusherChatModule extends ToggleableModule {
-    private static final Logger LOGGER = Logger.getLogger(RusherChatModule.class.getName());
-    private static RusherChatModule instance; // Singleton instance
 
-    private static final String DEFAULT_HOST = "198.251.79.78";
-    private static final int DEFAULT_PORT = 42424;
+    private static final Logger LOGGER = Logger.getLogger(RusherChatModule.class.getName());
+    private static RusherChatModule instance;
+
+    private static final String CHAT_ENDPOINT = "wss://rusherchat.smokelog.org";
 
     private RusherChatWindow chatWindow;
     private ChatClient chatClient;
-    private final List<String> messageQueue = new ArrayList<>(); // Queue for messages before window initialization
+    private final List<String> messageQueue = new ArrayList<>();
 
     static {
-        // Configure JUL programmatically
         Logger logger = Logger.getLogger("garlicrot.rusherchat");
         logger.setLevel(Level.INFO);
         logger.setUseParentHandlers(false);
@@ -33,97 +28,67 @@ public class RusherChatModule extends ToggleableModule {
         handler.setLevel(Level.INFO);
         handler.setFormatter(new Formatter() {
             @Override
-            public String format(LogRecord record) {
+            public String format(LogRecord r) {
                 return String.format(
-                        "%tF %<tT [%s] %s - %s%s%n",
-                        record.getMillis(),
-                        record.getLevel(),
-                        record.getLoggerName(),
-                        record.getMessage(),
-                        record.getThrown() != null ? " " + record.getThrown() : ""
+                        "%tF %<tT [%s] %s - %s%n",
+                        r.getMillis(), r.getLevel(), r.getLoggerName(), r.getMessage()
                 );
             }
         });
         logger.addHandler(handler);
     }
 
-    // Private constructor to enforce singleton
     private RusherChatModule() {
-        super("RusherChat", "Chat with other users running the plugin", ModuleCategory.MISC);
-        LOGGER.info("RusherChatModule instance created");
+        super("RusherChat", "Shared chat for users running the plugin", ModuleCategory.MISC);
     }
 
-    // Singleton getter
     public static synchronized RusherChatModule getInstance() {
-        if (instance == null) {
-            instance = new RusherChatModule();
-        } else {
-            LOGGER.info("Returning existing RusherChatModule instance");
-        }
+        if (instance == null) instance = new RusherChatModule();
         return instance;
     }
 
     @Override
     public void onEnable() {
-        LOGGER.info("Enabling RusherChat module");
-
         if (chatClient == null) {
-            LOGGER.info("Creating ChatClient for " + DEFAULT_HOST + ":" + DEFAULT_PORT);
-            chatClient = new ChatClient(DEFAULT_HOST, DEFAULT_PORT, this::handleIncoming);
+            chatClient = new ChatClient(CHAT_ENDPOINT, 0, this::handleIncoming);
             chatClient.connect();
-        } else {
-            LOGGER.info("ChatClient already initialized, skipping creation");
         }
 
         if (chatWindow == null) {
             chatWindow = new RusherChatWindow(chatClient, this::handleSend);
             RusherHackAPI.getWindowManager().registerFeature(chatWindow);
-            LOGGER.info("Registered RusherChat window");
         }
 
         chatWindow.setHidden(false);
-        LOGGER.fine("RusherChat window shown");
 
-        // Process any queued messages after initialization
         if (!messageQueue.isEmpty()) {
-            for (String msg : messageQueue) {
-                handleIncoming(msg);
-            }
+            messageQueue.forEach(this::handleIncoming);
             messageQueue.clear();
         }
     }
 
     @Override
     public void onDisable() {
-        LOGGER.info("Disabling RusherChat module");
-
         if (chatWindow != null) {
             chatWindow.setHidden(true);
-            LOGGER.fine("RusherChat window hidden");
         }
 
         if (chatClient != null) {
             chatClient.close();
-            chatClient = null; // Reset to allow reinitialization
-            LOGGER.fine("ChatClient closed");
+            chatClient = null;
         }
     }
 
     private void handleSend(String message) {
         if (chatClient != null) {
             chatClient.send(message);
-            LOGGER.fine("Sent message: " + message);
-        } else {
-            LOGGER.warning("Cannot send message: ChatClient is null");
         }
     }
 
     private void handleIncoming(String message) {
         if (chatWindow != null) {
             chatWindow.addMessage(message);
-            LOGGER.fine("Received message: " + message);
         } else {
-            LOGGER.warning("ChatWindow not initialized, queuing message: " + message);
             messageQueue.add(message);
         }
     }
