@@ -6,19 +6,32 @@ import net.minecraft.client.Minecraft;
 import org.java_websocket.client.WebSocketClient;
 import org.java_websocket.handshake.ServerHandshake;
 
+import javax.crypto.Cipher;
+import javax.crypto.spec.GCMParameterSpec;
+import javax.crypto.spec.SecretKeySpec;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.SecureRandom;
+import java.util.Base64;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.*;
+import java.util.Arrays;
 
 public class ChatClient {
     private static final Logger LOGGER = Logger.getLogger(ChatClient.class.getName());
     private static final int MAX_MESSAGE_LENGTH = 256;
     private static final boolean AUTO_RECONNECT = true;
     private static final boolean SHOW_JOIN_MESSAGE = true;
+
+    // Must match server secret!
+    private static final String WHISPER_SECRET = "rusherchat-whisper-key-01";
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
+    private static SecretKeySpec WHISPER_KEY;
 
     private final URI serverUri;
     private final java.util.function.Consumer<String> onReceive;
@@ -62,6 +75,30 @@ public class ChatClient {
         LOGGER.info("ChatClient instance created for " + serverUri);
     }
 
+    // --- Encryption helpers (must mirror server) ---
+
+    private static SecretKeySpec getWhisperKey() throws Exception {
+        if (WHISPER_KEY == null) {
+            MessageDigest sha = MessageDigest.getInstance("SHA-256");
+            byte[] key = sha.digest(WHISPER_SECRET.getBytes(StandardCharsets.UTF_8));
+            WHISPER_KEY = new SecretKeySpec(key, "AES");
+        }
+        return WHISPER_KEY;
+    }
+
+    private static String decryptWhisper(String cipherTextB64) throws Exception {
+        byte[] combined = Base64.getDecoder().decode(cipherTextB64);
+        byte[] iv = Arrays.copyOfRange(combined, 0, 12);
+        byte[] cipherBytes = Arrays.copyOfRange(combined, 12, combined.length);
+
+        Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+        cipher.init(Cipher.DECRYPT_MODE, getWhisperKey(), new GCMParameterSpec(128, iv));
+        byte[] plainBytes = cipher.doFinal(cipherBytes);
+        return new String(plainBytes, StandardCharsets.UTF_8);
+    }
+
+    // --- Connection logic ---
+
     public void connect() {
         if (connected.get() || (wsClient != null && wsClient.isOpen())) return;
 
@@ -87,13 +124,25 @@ public class ChatClient {
 
                 try {
                     Message msg = gson.fromJson(message, Message.class);
+                    if (msg == null) return;
+
                     String content = msg.getContent();
+
+                    // Decrypt whispers
+                    if (msg.getType() == Message.Type.WHISPER && content != null && !content.isEmpty()) {
+                        try {
+                            content = decryptWhisper(content);
+                        } catch (Exception e) {
+                            LOGGER.log(Level.WARNING, "Failed to decrypt whisper; showing raw content", e);
+                        }
+                    }
+
                     if (content == null || content.trim().isEmpty()) return;
 
                     String rawUsername = stripColor(msg.getUsername()).toLowerCase();
                     if (ignoredUsers.contains(rawUsername)) return;
 
-                    onReceive.accept(formatDisplayMessage(msg));
+                    onReceive.accept(formatDisplayMessage(msg, content));
                 } catch (JsonSyntaxException e) {
                     LOGGER.log(Level.SEVERE, "Invalid JSON: " + message, e);
                 }
@@ -125,12 +174,15 @@ public class ChatClient {
         }
     }
 
+    // --- Sending messages ---
+
     public void send(String content) {
         if (wsClient == null || !wsClient.isOpen()) {
             sendPrivate("§7[System] Not connected to server.");
             return;
         }
 
+        // Local /ignore command
         if (content.startsWith("/i ") || content.startsWith("/ignore ")) {
             String[] parts = content.split(" ", 2);
             if (parts.length < 2 || parts[1].trim().isEmpty()) {
@@ -172,6 +224,8 @@ public class ChatClient {
             onReceive.accept(message);
         }
     }
+
+    // --- Lifecycle ---
 
     public void close() {
         connected.set(false);
@@ -221,8 +275,9 @@ public class ChatClient {
         }
     }
 
-    private String formatDisplayMessage(Message msg) {
-        String content = msg.getContent();
+    // --- Display helpers ---
+
+    private String formatDisplayMessage(Message msg, String content) {
         String usernameDisplay = msg.getColoredUsername() != null
                 ? msg.getColoredUsername()
                 : msg.getUsername();
