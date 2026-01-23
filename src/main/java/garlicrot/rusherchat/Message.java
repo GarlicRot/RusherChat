@@ -16,7 +16,10 @@ public class Message {
     private String target;
     private boolean whisper;
 
+    private String publicKey;
+
     public Message() {
+        this.type = Type.CHAT;
     }
 
     public Message(String username, String content) {
@@ -73,12 +76,16 @@ public class Message {
         return target;
     }
 
-    public String getTargetColored() {
-        return target;
-    }
-
     public boolean isWhisper() {
         return whisper;
+    }
+
+    public String getPublicKey() {
+        return publicKey;
+    }
+
+    public void setPublicKey(String publicKey) {
+        this.publicKey = publicKey;
     }
 
     @Override
