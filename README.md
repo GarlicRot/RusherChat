@@ -19,7 +19,7 @@ RusherChat allows users running the plugin to connect and chat across any Minecr
 - Global communication between RusherHacks users across supported Minecraft versions.
 - Dedicated chat window integrated into the RusherHacks interface.
 - Color-coded usernames for consistent and visually distinct chat display.
-- Command-based chat control for private messaging and user management.
+- Encrypted whisper support using AES-GCM for private messages (not end-to-end encrypted).
 
 
 ## Commands
@@ -31,7 +31,8 @@ RusherChat allows users running the plugin to connect and chat across any Minecr
 | `/ignore` or `/i <username>`           | Toggles ignoring messages from the specified user.           |
 
 > [!WARNING]
-> Whisper messages are not end-to-end encrypted. Do **not** share passwords, IPs, coordinates, or any sensitive information through whispers.
+> End-to-end encrypted whispers are not yet implemented. For now, whispers are encrypted in transit using AES-GCM, but the server can still read them.
+> Do not send sensitive information until E2EE is released.
 
 ## Installation
 
