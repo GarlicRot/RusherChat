@@ -2,11 +2,11 @@ name: Update Changelog
 
 on:
   push:
-    branches: [master]
+    branches: [ master ]
     paths:
-      - '**.java' # Trigger on Java file changes
-      - '**.md' # Trigger on Markdown changes (e.g., README)
-      - '!CHANGELOG.md' # Exclude changes to CHANGELOG.md itself
+      - '**/*.java'      # Trigger on Java file changes
+      - '**/*.md'        # Trigger on Markdown changes (e.g., README)
+      - '!CHANGELOG.md'  # Exclude direct changes to CHANGELOG.md
 
 jobs:
   changelog:
@@ -17,7 +17,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # Fetch full history for git log
+          fetch-depth: 0
 
       - name: Set up Git
         run: |
@@ -28,31 +28,116 @@ jobs:
       - name: Debug Git log
         run: |
           echo "Listing recent commits (raw git log):"
-          git log -n 10 --pretty=format:'%h%x1f%an%x1f%ad%x1f%s%x1f%b' --date=short
+          git log -n 10 --pretty=format:'%h%x1f%an%x1f%ad%x1f%s%x1f%b' --date=short || true
+          echo
           echo "Last CHANGELOG.md commit:"
           git log -1 --pretty=%H -- CHANGELOG.md || echo "No CHANGELOG.md commits found"
 
       - name: Generate changelog entries
         run: |
-          # Read existing CHANGELOG.md or create a new one
+          set -e
+
+          REPO_SLUG="${GITHUB_REPOSITORY}" # e.g. GarlicRot/RusherChat
+
+          # Ensure CHANGELOG.md exists
           if [ ! -f CHANGELOG.md ]; then
-            echo -e "# Changelog\n\nAll notable changes to **${{ github.event.repository.name }}** are documented here.\n\n## [Unreleased]\n- No unreleased changes at this time." > CHANGELOG.md
+            echo "CHANGELOG.md not found; creating a new one."
+            echo "# Changelog" > CHANGELOG.md
+            echo >> CHANGELOG.md
+            echo "All notable changes to **RusherChat** are documented here." >> CHANGELOG.md
+            echo >> CHANGELOG.md
+            echo "## [Unreleased]" >> CHANGELOG.md
+            echo >> CHANGELOG.md
           fi
 
           # Get the hash of the last commit that modified CHANGELOG.md
           last_changelog_commit=$(git log -1 --pretty=%H -- CHANGELOG.md || echo "")
+          echo "Last CHANGELOG commit: ${last_changelog_commit:-<none>}"
+
           if [ -z "$last_changelog_commit" ]; then
-            # If no changelog commit exists, get all commits
+            # No changelog commit yet: use full history
             latest_commits=$(git log --pretty=format:'%h%x1f%an%x1f%ad%x1f%s%x1f%b' --date=short)
           else
             # Get commits since the last changelog update
-            latest_commits=$(git log $last_changelog_commit..HEAD --pretty=format:'%h%x1f%an%x1f%ad%x1f%s%x1f%b' --date=short)
+            latest_commits=$(git log ${last_changelog_commit}..HEAD --pretty=format:'%h%x1f%an%x1f%ad%x1f%s%x1f%b' --date=short)
           fi
 
-          # Filter for meaningful commits (exclude merges and changelog updates)
-          filtered_commits=$(echo "$latest_commits" | grep -v -E '^Merge |^docs\(changelog\):')
+          if [ -z "$latest_commits" ]; then
+            echo "No commits found to consider."
+            exit 0
+          fi
+
+          echo "Raw commits since last changelog update:"
+          echo "$latest_commits"
+          echo
+
+          # Filter for meaningful commits (exclude merges and explicit changelog doc commits)
+          filtered_commits=$(echo "$latest_commits" | grep -v -E '^Merge |^docs\(changelog\):' || true)
 
           if [ -z "$filtered_commits" ]; then
             echo "No new meaningful commits to add to changelog."
             exit 0
           fi
+
+          echo "Filtered commits:"
+          echo "$filtered_commits"
+          echo
+
+          # Build markdown entries from filtered commits
+          new_entries=""
+          while IFS=$'\x1f' read -r hash author date subject body; do
+            [ -z "$hash" ] && continue
+
+            short_hash="$hash"
+            commit_url="https://github.com/${REPO_SLUG}/commit/${hash}"
+
+            new_entries+="- \`${subject}\` – [\`${short_hash}\`](${commit_url}) by ${author}\n"
+          done <<< "$filtered_commits"
+
+          if [ -z "$new_entries" ]; then
+            echo "No formatted entries produced, nothing to add."
+            exit 0
+          fi
+
+          echo "New changelog entries to insert:"
+          printf '%b\n' "$new_entries"
+          echo
+
+          # Insert entries under the "## [Unreleased]" section
+          tmp_file=$(mktemp)
+
+          awk -v entries="$new_entries" '
+            BEGIN { inserted=0 }
+            /^## \[Unreleased\]/ {
+              print
+              printf "%s\n\n", entries
+              inserted=1
+              next
+            }
+            { print }
+            END {
+              if (!inserted) {
+                print ""
+                print "## [Unreleased]"
+                print entries
+                print ""
+              }
+            }
+          ' CHANGELOG.md > "$tmp_file"
+
+          mv "$tmp_file" CHANGELOG.md
+
+          echo "Updated CHANGELOG.md:"
+          cat CHANGELOG.md
+
+      - name: Commit and push changes
+        run: |
+          set -e
+          if git diff --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+
+          git add CHANGELOG.md
+          git commit -m "docs(changelog): update changelog"
+          git push origin HEAD:master
