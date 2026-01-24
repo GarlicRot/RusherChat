@@ -91,7 +91,7 @@ public class ChatClient {
         }
 
         this.onReceive = onReceive;
-        LOGGER.info("ChatClient instance created for " + serverUri);
+        LOGGER.fine("ChatClient instance created for " + serverUri);
         initKeyPair();
     }
 
@@ -104,7 +104,7 @@ public class ChatClient {
             this.keyPair = kpg.generateKeyPair();
             this.privateKey = keyPair.getPrivate();
             this.publicKey = keyPair.getPublic();
-            LOGGER.info("Generated new RSA keypair for RusherChat");
+            LOGGER.fine("Initialized RSA keypair for RusherChat E2EE");
         } catch (Exception e) {
             LOGGER.log(Level.SEVERE, "Failed to generate RSA keypair", e);
         }
@@ -212,7 +212,7 @@ public class ChatClient {
             X509EncodedKeySpec spec = new X509EncodedKeySpec(decoded);
             PublicKey pk = KeyFactory.getInstance("RSA").generatePublic(spec);
             knownPublicKeys.put(username.toLowerCase(), pk);
-            LOGGER.info("Stored public key for user " + username);
+            LOGGER.fine("Stored public key for user " + username);
         } catch (Exception e) {
             LOGGER.log(Level.WARNING, "Failed to parse user public key for " + username, e);
         }
@@ -230,10 +230,16 @@ public class ChatClient {
 
                 String username = Minecraft.getInstance().getUser().getName();
                 Message login = new Message(Message.Type.LOGIN, username, null, null, null, false);
+
+                // Attach our public key without spamming logs
                 String pubKeyB64 = getPublicKeyBase64();
-                if (pubKeyB64 != null) {
+                if (pubKeyB64 != null && !pubKeyB64.isEmpty()) {
                     login.setPublicKey(pubKeyB64);
+                    LOGGER.fine("[E2EE] Attaching publicKey to LOGIN (length=" + pubKeyB64.length() + " chars)");
+                } else {
+                    LOGGER.warning("[E2EE] Public key is null/empty at LOGIN time – not attaching key.");
                 }
+
                 wsClient.send(gson.toJson(login));
 
                 if (SHOW_JOIN_MESSAGE) {
@@ -314,14 +320,14 @@ public class ChatClient {
                 SSLContext sslContext = SSLContext.getInstance("TLS");
                 sslContext.init(null, null, null);
                 wsClient.setSocketFactory(sslContext.getSocketFactory());
-                LOGGER.info("SSL context configured for WSS connection.");
+                LOGGER.fine("SSL context configured for WSS connection.");
             } catch (Exception e) {
                 LOGGER.log(Level.SEVERE, "Failed to set up SSL for WSS connection", e);
             }
         }
 
         try {
-            LOGGER.info("Attempting to connect to " + serverUri);
+            LOGGER.fine("Attempting to connect to " + serverUri);
             wsClient.connectBlocking();
         } catch (InterruptedException e) {
             LOGGER.log(Level.SEVERE, "WebSocket connection failed", e);
@@ -496,7 +502,7 @@ public class ChatClient {
         if (wsClient != null) {
             wsClient.close();
             wsClient = null;
-            LOGGER.info("WebSocketClient closed.");
+            LOGGER.fine("WebSocketClient closed.");
         }
         try {
             if (!scheduler.isShutdown()) {
