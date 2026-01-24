@@ -18,6 +18,7 @@ public class RusherChatModule extends ToggleableModule {
     private RusherChatWindow chatWindow;
     private ChatClient chatClient;
     private final List<String> messageQueue = new ArrayList<>();
+    private List<String> lastOnlineUsers = new ArrayList<>();
 
     static {
         Logger logger = Logger.getLogger("garlicrot.rusherchat");
@@ -50,13 +51,23 @@ public class RusherChatModule extends ToggleableModule {
     @Override
     public void onEnable() {
         if (chatClient == null) {
-            chatClient = new ChatClient(CHAT_ENDPOINT, 0, this::handleIncoming);
+            chatClient = new ChatClient(
+                    CHAT_ENDPOINT,
+                    0,
+                    this::handleIncoming,
+                    this::handleOnlineListUpdate
+            );
             chatClient.connect();
         }
 
         if (chatWindow == null) {
+            // Window sends via handleSend; receives data via callbacks above
             chatWindow = new RusherChatWindow(chatClient, this::handleSend);
             RusherHackAPI.getWindowManager().registerFeature(chatWindow);
+
+            if (!lastOnlineUsers.isEmpty()) {
+                chatWindow.setOnlineUsers(lastOnlineUsers);
+            }
         }
 
         chatWindow.setHidden(false);
@@ -90,6 +101,18 @@ public class RusherChatModule extends ToggleableModule {
             chatWindow.addMessage(message);
         } else {
             messageQueue.add(message);
+        }
+    }
+
+    /**
+     * Called by ChatClient whenever the server sends an ONLINE_LIST update.
+     */
+    private void handleOnlineListUpdate(List<String> users) {
+        // Keep the most recent list so we can apply it when the window is (re)created.
+        lastOnlineUsers = new ArrayList<>(users);
+
+        if (chatWindow != null) {
+            chatWindow.setOnlineUsers(users);
         }
     }
 }

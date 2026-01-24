@@ -21,10 +21,12 @@ import java.security.PrivateKey;
 import java.security.PublicKey;
 import java.security.SecureRandom;
 import java.security.spec.X509EncodedKeySpec;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -42,6 +44,7 @@ public class ChatClient {
 
     private final URI serverUri;
     private final java.util.function.Consumer<String> onReceive;
+    private final java.util.function.Consumer<List<String>> onOnlineListUpdate;
     private final Gson gson = new Gson();
 
     private WebSocketClient wsClient;
@@ -53,8 +56,6 @@ public class ChatClient {
     private final Set<String> ignoredUsers = Collections.synchronizedSet(new HashSet<>());
     private long lastSendTime = 0;
 
-    // E2EE state
-    private KeyPair keyPair;
     private PrivateKey privateKey;
     private PublicKey publicKey;
     private final ConcurrentMap<String, PublicKey> knownPublicKeys = new ConcurrentHashMap<>();
@@ -83,7 +84,12 @@ public class ChatClient {
         logger.addHandler(handler);
     }
 
-    public ChatClient(String host, int port, java.util.function.Consumer<String> onReceive) {
+    public ChatClient(
+            String host,
+            int port,
+            java.util.function.Consumer<String> onReceive,
+            java.util.function.Consumer<List<String>> onOnlineListUpdate
+    ) {
         if (host.startsWith("ws://") || host.startsWith("wss://")) {
             this.serverUri = URI.create(host);
         } else {
@@ -91,6 +97,7 @@ public class ChatClient {
         }
 
         this.onReceive = onReceive;
+        this.onOnlineListUpdate = onOnlineListUpdate;
         LOGGER.fine("ChatClient instance created for " + serverUri);
         initKeyPair();
     }
@@ -101,7 +108,8 @@ public class ChatClient {
         try {
             KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA");
             kpg.initialize(2048);
-            this.keyPair = kpg.generateKeyPair();
+            // E2EE state
+            KeyPair keyPair = kpg.generateKeyPair();
             this.privateKey = keyPair.getPrivate();
             this.publicKey = keyPair.getPublic();
             LOGGER.fine("Initialized RSA keypair for RusherChat E2EE");
@@ -218,6 +226,31 @@ public class ChatClient {
         }
     }
 
+    private void handleOnlineListSystemMessage(String content) {
+        // Expected format: ONLINE_LIST:name1,name2,...
+        final String prefix = "ONLINE_LIST:";
+        if (!content.startsWith(prefix)) {
+            return;
+        }
+
+        String payload = content.substring(prefix.length());
+        List<String> users = new ArrayList<>();
+
+        if (!payload.isBlank()) {
+            String[] split = payload.split(",");
+            for (String s : split) {
+                String name = s.trim();
+                if (!name.isEmpty()) {
+                    users.add(name);
+                }
+            }
+        }
+
+        if (onOnlineListUpdate != null) {
+            onOnlineListUpdate.accept(users);
+        }
+    }
+
     // --- Connection logic ---
 
     public void connect() {
@@ -260,10 +293,17 @@ public class ChatClient {
                     String content = msg.getContent();
                     Message.Type type = msg.getType();
 
-                    // SYSTEM key announcement
-                    if (type == Message.Type.SYSTEM && content != null && content.startsWith("USER_KEY:")) {
-                        handleUserKeySystemMessage(content);
-                        return;
+                    // SYSTEM: key announcements + online list
+                    if (type == Message.Type.SYSTEM && content != null) {
+                        if (content.startsWith("USER_KEY:")) {
+                            handleUserKeySystemMessage(content);
+                            return;
+                        }
+                        if (content.startsWith("ONLINE_LIST:")) {
+                            handleOnlineListSystemMessage(content);
+                            return;
+                        }
+                        // fall through for "normal" system messages so they still show up in chat
                     }
 
                     // Decrypt E2EE whispers
