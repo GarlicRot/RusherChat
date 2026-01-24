@@ -1,6 +1,6 @@
 <h1 align="center">RusherChat</h1>
 
-<h3 align="center">WebSocket-based global chat for users running the plugin</h3>
+<h3 align="center">WebSocket-powered chat for RusherHack</h3>
 
 <p align="center">
   <img src="https://img.shields.io/github/downloads/GarlicRot/RusherChat/total?label=Downloads" alt="GitHub Downloads (all assets, all releases)">
@@ -11,15 +11,16 @@
 
 ## Overview
 
-RusherChat allows users running the plugin to connect and chat across any Minecraft version available to RusherHacks through a shared WebSocket server. Messages are transmitted instantly and displayed in a dedicated chat window within the RusherHacks interface.
+RusherChat allows users running the plugin to connect and chat across any Minecraft version available to RusherHacks through a shared WebSocket server. Messages are transmitted instantly and displayed in a dedicated chat window within RusherHack.
 
 
 ## Features
 
-- Global communication between RusherHacks users across supported Minecraft versions.
-- Dedicated chat window integrated into the RusherHacks interface.
-- Color-coded usernames for consistent and visually distinct chat display.
-- Encrypted whisper support using AES-GCM for private messages (not end-to-end encrypted).
+- Global chat
+- Online list
+- Colored names
+- E2EE whispers
+- Secure transport
 
 
 ## Commands
@@ -30,9 +31,8 @@ RusherChat allows users running the plugin to connect and chat across any Minecr
 | `/reply` or `/r <message>`             | Sends a private message to the last user who whispered to you. |
 | `/ignore` or `/i <username>`           | Toggles ignoring messages from the specified user.           |
 
-> [!WARNING]
-> End-to-end encrypted whispers are not yet implemented. For now, whispers are encrypted in transit using AES-GCM, but the server can still read them.
-> Do not send sensitive information until E2EE is released.
+> [!NOTE]
+> Whispers are now fully end-to-end encrypted. Messages are encrypted on the sender's client and decrypted only on the recipient's client. The server cannot read whisper contents.
 
 ## Installation
 
