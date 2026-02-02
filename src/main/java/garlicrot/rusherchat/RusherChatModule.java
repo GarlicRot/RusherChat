@@ -13,7 +13,7 @@ public class RusherChatModule extends ToggleableModule {
     private static final Logger LOGGER = Logger.getLogger(RusherChatModule.class.getName());
     private static RusherChatModule instance;
 
-    private static final String CHAT_ENDPOINT = "wss://rusherchat.smokelog.org";
+    private static final String CHAT_ENDPOINT = "wss://chat.garlicrot.dev";
 
     private RusherChatWindow chatWindow;
     private ChatClient chatClient;
