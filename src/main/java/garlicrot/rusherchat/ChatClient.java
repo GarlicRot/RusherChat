@@ -42,10 +42,14 @@ public class ChatClient {
 
     private static final SecureRandom RAND = new SecureRandom();
 
+    private static final String OUTDATED_PREFIX = "OUTDATED_PLUGIN:";
+
     private final URI serverUri;
     private final java.util.function.Consumer<String> onReceive;
     private final java.util.function.Consumer<List<String>> onOnlineListUpdate;
     private final Gson gson = new Gson();
+
+    private final String clientVersion;
 
     private WebSocketClient wsClient;
     private final AtomicBoolean connected = new AtomicBoolean(false);
@@ -90,6 +94,16 @@ public class ChatClient {
             java.util.function.Consumer<String> onReceive,
             java.util.function.Consumer<List<String>> onOnlineListUpdate
     ) {
+        this(host, port, onReceive, onOnlineListUpdate, detectClientVersion());
+    }
+
+    public ChatClient(
+            String host,
+            int port,
+            java.util.function.Consumer<String> onReceive,
+            java.util.function.Consumer<List<String>> onOnlineListUpdate,
+            String clientVersion
+    ) {
         if (host.startsWith("ws://") || host.startsWith("wss://")) {
             this.serverUri = URI.create(host);
         } else {
@@ -98,8 +112,15 @@ public class ChatClient {
 
         this.onReceive = onReceive;
         this.onOnlineListUpdate = onOnlineListUpdate;
-        LOGGER.fine("ChatClient instance created for " + serverUri);
+        this.clientVersion = (clientVersion == null || clientVersion.isBlank()) ? "unknown" : clientVersion.trim();
+
+        LOGGER.fine("ChatClient instance created for " + serverUri + " (clientVersion=" + this.clientVersion + ")");
         initKeyPair();
+    }
+
+    private static String detectClientVersion() {
+        String v = ChatClient.class.getPackage().getImplementationVersion();
+        return (v != null && !v.isBlank()) ? v : "dev";
     }
 
     // --- Keypair / public key helpers ---
@@ -108,7 +129,6 @@ public class ChatClient {
         try {
             KeyPairGenerator kpg = KeyPairGenerator.getInstance("RSA");
             kpg.initialize(2048);
-            // E2EE state
             KeyPair keyPair = kpg.generateKeyPair();
             this.privateKey = keyPair.getPrivate();
             this.publicKey = keyPair.getPublic();
@@ -119,9 +139,7 @@ public class ChatClient {
     }
 
     private String getPublicKeyBase64() {
-        if (publicKey == null) {
-            return null;
-        }
+        if (publicKey == null) return null;
         return Base64.getEncoder().encodeToString(publicKey.getEncoded());
     }
 
@@ -133,17 +151,14 @@ public class ChatClient {
             throw new IllegalStateException("No public key for user: " + targetUsername);
         }
 
-        // AES key
         KeyGenerator kg = KeyGenerator.getInstance("AES");
         kg.init(256);
         SecretKey aesKey = kg.generateKey();
 
-        // Encrypt AES key with recipient's RSA key
         Cipher rsa = Cipher.getInstance("RSA/ECB/OAEPWithSHA-256AndMGF1Padding");
         rsa.init(Cipher.ENCRYPT_MODE, targetKey);
         byte[] encKey = rsa.doFinal(aesKey.getEncoded());
 
-        // Encrypt message with AES-GCM
         byte[] iv = new byte[12];
         RAND.nextBytes(iv);
 
@@ -152,9 +167,7 @@ public class ChatClient {
         byte[] cipherBytes = aes.doFinal(plainText.getBytes(StandardCharsets.UTF_8));
 
         int keyLen = encKey.length;
-        if (keyLen > 65535) {
-            throw new IllegalStateException("Encrypted key too long");
-        }
+        if (keyLen > 65535) throw new IllegalStateException("Encrypted key too long");
 
         byte[] envelope = new byte[2 + keyLen + iv.length + cipherBytes.length];
         envelope[0] = (byte) ((keyLen >>> 8) & 0xFF);
@@ -167,19 +180,15 @@ public class ChatClient {
     }
 
     private String decryptWhisperEnvelope(String b64Envelope) throws Exception {
-        if (privateKey == null) {
-            throw new IllegalStateException("No private key available for decryption");
-        }
+        if (privateKey == null) throw new IllegalStateException("No private key available for decryption");
 
         byte[] envelope = Base64.getDecoder().decode(b64Envelope);
-        if (envelope.length < 2 + 1 + 12) {
-            throw new IllegalArgumentException("Envelope too short");
-        }
+        if (envelope.length < 2 + 1 + 12) throw new IllegalArgumentException("Envelope too short");
 
         int keyLen = ((envelope[0] & 0xFF) << 8) | (envelope[1] & 0xFF);
         int offset = 2;
 
-        if (keyLen <= 0 || keyLen + 2 + 12 > envelope.length) {
+        if (keyLen == 0 || keyLen + 2 + 12 > envelope.length) {
             throw new IllegalArgumentException("Invalid envelope key length");
         }
 
@@ -191,13 +200,11 @@ public class ChatClient {
 
         byte[] cipherBytes = Arrays.copyOfRange(envelope, offset, envelope.length);
 
-        // RSA decrypt AES key
         Cipher rsa = Cipher.getInstance("RSA/ECB/OAEPWithSHA-256AndMGF1Padding");
         rsa.init(Cipher.DECRYPT_MODE, privateKey);
         byte[] aesKeyBytes = rsa.doFinal(encKey);
         SecretKeySpec aesKey = new SecretKeySpec(aesKeyBytes, "AES");
 
-        // AES-GCM decrypt
         Cipher aes = Cipher.getInstance("AES/GCM/NoPadding");
         aes.init(Cipher.DECRYPT_MODE, aesKey, new GCMParameterSpec(128, iv));
         byte[] plainBytes = aes.doFinal(cipherBytes);
@@ -206,11 +213,8 @@ public class ChatClient {
     }
 
     private void handleUserKeySystemMessage(String content) {
-        // Expected format: USER_KEY:username:base64Key
         String[] parts = content.split(":", 3);
-        if (parts.length != 3) {
-            return;
-        }
+        if (parts.length != 3) return;
 
         String username = parts[1];
         String b64 = parts[2];
@@ -227,28 +231,41 @@ public class ChatClient {
     }
 
     private void handleOnlineListSystemMessage(String content) {
-        // Expected format: ONLINE_LIST:name1,name2,...
         final String prefix = "ONLINE_LIST:";
-        if (!content.startsWith(prefix)) {
-            return;
-        }
+        if (!content.startsWith(prefix)) return;
 
         String payload = content.substring(prefix.length());
         List<String> users = new ArrayList<>();
 
         if (!payload.isBlank()) {
-            String[] split = payload.split(",");
-            for (String s : split) {
+            for (String s : payload.split(",")) {
                 String name = s.trim();
-                if (!name.isEmpty()) {
-                    users.add(name);
-                }
+                if (!name.isEmpty()) users.add(name);
             }
         }
 
-        if (onOnlineListUpdate != null) {
-            onOnlineListUpdate.accept(users);
-        }
+        if (onOnlineListUpdate != null) onOnlineListUpdate.accept(users);
+    }
+
+    /**
+     * Server should send:
+     * OUTDATED_PLUGIN:<clientVersion>:<latestVersion>:<downloadUrl>
+     */
+    private boolean handleOutdatedPluginSystemMessage(String content) {
+        if (!content.startsWith(OUTDATED_PREFIX)) return false;
+
+        String[] parts = content.split(":", 4);
+        if (parts.length < 4) return true;
+
+        String clientV = parts[1];
+        String latestV = parts[2];
+        String url = parts[3];
+
+        sendPrivate("§c[System] Your RusherChat plugin is outdated.");
+        sendPrivate("§7[System] You: §f" + clientV + " §7| Latest: §f" + latestV);
+        sendPrivate("§7[System] Download: §b" + url);
+
+        return true;
     }
 
     // --- Connection logic ---
@@ -264,7 +281,9 @@ public class ChatClient {
                 String username = Minecraft.getInstance().getUser().getName();
                 Message login = new Message(Message.Type.LOGIN, username, null, null, null, false);
 
-                // Attach our public key without spamming logs
+                // Send plugin version so server can compare vs latest GitHub release
+                login.setClientVersion(clientVersion);
+
                 String pubKeyB64 = getPublicKeyBase64();
                 if (pubKeyB64 != null && !pubKeyB64.isEmpty()) {
                     login.setPublicKey(pubKeyB64);
@@ -278,7 +297,7 @@ public class ChatClient {
                 if (SHOW_JOIN_MESSAGE) {
                     onReceive.accept("§7[System] Connected to chat server.");
                 }
-                LOGGER.info("Connected to " + serverUri + " as " + username);
+                LOGGER.info("Connected to " + serverUri + " as " + username + " (clientVersion=" + clientVersion + ")");
                 startPing();
             }
 
@@ -293,7 +312,6 @@ public class ChatClient {
                     String content = msg.getContent();
                     Message.Type type = msg.getType();
 
-                    // SYSTEM: key announcements + online list
                     if (type == Message.Type.SYSTEM && content != null) {
                         if (content.startsWith("USER_KEY:")) {
                             handleUserKeySystemMessage(content);
@@ -303,10 +321,13 @@ public class ChatClient {
                             handleOnlineListSystemMessage(content);
                             return;
                         }
-                        // fall through for "normal" system messages so they still show up in chat
+                        if (content.startsWith(OUTDATED_PREFIX)) {
+                            handleOutdatedPluginSystemMessage(content);
+                            return;
+                        }
+                        // fall through for other system messages
                     }
 
-                    // Decrypt E2EE whispers
                     if (type == Message.Type.WHISPER && content != null && !content.isEmpty()) {
                         try {
                             content = decryptWhisperEnvelope(content);
@@ -321,14 +342,11 @@ public class ChatClient {
                     if (ignoredUsers.contains(rawUsername)) return;
 
                     if (type == Message.Type.WHISPER) {
-                        // crude partner extraction from "[Whisper] Name" / "[Whisper ->] Name"
                         String stripped = rawUsername
                                 .replace("[whisper]", "")
                                 .replace("[whisper ->]", "")
                                 .trim();
-                        if (!stripped.isEmpty()) {
-                            lastWhisperUser = stripped;
-                        }
+                        if (!stripped.isEmpty()) lastWhisperUser = stripped;
                     }
 
                     onReceive.accept(formatDisplayMessage(msg, content));
@@ -354,7 +372,6 @@ public class ChatClient {
             }
         };
 
-        // Enable TLS for wss:// connections
         if ("wss".equalsIgnoreCase(serverUri.getScheme())) {
             try {
                 SSLContext sslContext = SSLContext.getInstance("TLS");
@@ -383,7 +400,6 @@ public class ChatClient {
             return;
         }
 
-        // Local /ignore
         if (content.startsWith("/i ") || content.startsWith("/ignore ")) {
             String[] parts = content.split(" ", 2);
             if (parts.length < 2 || parts[1].trim().isEmpty()) {
@@ -402,13 +418,11 @@ public class ChatClient {
             return;
         }
 
-        // E2EE whispers handled client-side
         if (content.startsWith("/w ") || content.startsWith("/whisper ")) {
             handleWhisperSend(content);
             return;
         }
 
-        // E2EE reply handled client-side
         if (content.startsWith("/r ") || content.startsWith("/reply ")) {
             handleReplySend(content);
             return;
@@ -468,10 +482,7 @@ public class ChatClient {
             );
             wsClient.send(gson.toJson(msg));
 
-            // Local echo as plaintext
-            String display = "§5[Whisper ->] " + target + ": " + msgText;
-            onReceive.accept(display);
-
+            onReceive.accept("§5[Whisper ->] " + target + ": " + msgText);
             lastWhisperUser = target;
         } catch (Exception e) {
             LOGGER.log(Level.SEVERE, "Failed to encrypt whisper", e);
@@ -520,8 +531,7 @@ public class ChatClient {
             );
             wsClient.send(gson.toJson(msg));
 
-            String display = "§5[Whisper ->] " + target + ": " + msgText;
-            onReceive.accept(display);
+            onReceive.accept("§5[Whisper ->] " + target + ": " + msgText);
         } catch (Exception e) {
             LOGGER.log(Level.SEVERE, "Failed to encrypt whisper reply", e);
             sendPrivate("§7[System] Failed to send whisper (encryption error or missing key).");
@@ -529,9 +539,7 @@ public class ChatClient {
     }
 
     private void sendPrivate(String message) {
-        if (onReceive != null) {
-            onReceive.accept(message);
-        }
+        if (onReceive != null) onReceive.accept(message);
     }
 
     // --- Lifecycle ---
@@ -591,11 +599,11 @@ public class ChatClient {
                 ? msg.getColoredUsername()
                 : msg.getUsername();
 
-        if (usernameDisplay.contains("[Whisper ->]")) {
+        if (usernameDisplay != null && usernameDisplay.contains("[Whisper ->]")) {
             return "§5" + usernameDisplay + ": " + content;
-        } else if (usernameDisplay.contains("[Whisper]")) {
+        } else if (usernameDisplay != null && usernameDisplay.contains("[Whisper]")) {
             return "§d" + usernameDisplay + ": " + content;
-        } else if (usernameDisplay.contains("[System]")) {
+        } else if (usernameDisplay != null && usernameDisplay.contains("[System]")) {
             return "§7" + content;
         } else {
             return usernameDisplay + ": " + content;
@@ -603,6 +611,7 @@ public class ChatClient {
     }
 
     private String stripColor(String input) {
+        if (input == null) return "";
         return input.replaceAll("§[0-9A-FK-ORa-fk-or]", "").toLowerCase();
     }
 }

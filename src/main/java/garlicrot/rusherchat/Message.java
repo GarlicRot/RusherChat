@@ -16,7 +16,11 @@ public class Message {
     private String target;
     private boolean whisper;
 
+    // E2EE
     private String publicKey;
+
+    // Version handshake (client -> server)
+    private String clientVersion;
 
     public Message() {
         this.type = Type.CHAT;
@@ -86,6 +90,14 @@ public class Message {
 
     public void setPublicKey(String publicKey) {
         this.publicKey = publicKey;
+    }
+
+    public String getClientVersion() {
+        return clientVersion;
+    }
+
+    public void setClientVersion(String clientVersion) {
+        this.clientVersion = clientVersion;
     }
 
     @Override

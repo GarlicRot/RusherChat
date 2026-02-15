@@ -138,10 +138,14 @@ remapJar {
 }
 
 jar {
-	duplicatesStrategy = DuplicatesStrategy.EXCLUDE
-	manifest {
-		attributes('Minecraft-Version': project.minecraft_version)
-	}
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    manifest {
+        attributes(
+                'Minecraft-Version': project.minecraft_version,
+                'Implementation-Title': project.plugin_name,
+                'Implementation-Version': project.version.toString()
+        )
+    }
 }
 
 // IDE sync and launch config
