@@ -1,139 +1,61 @@
-name: Build and Release RusherChat Plugin
+name: Build and Attach Plugin JAR to Release
 
 on:
-  workflow_dispatch:  # Manually triggered workflow
+  release:
+    types: [published]
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
 
 jobs:
   build:
-    name: Build RusherChat Plugin
     runs-on: ubuntu-24.04
-    outputs:
-      new_version: ${{ steps.set_version.outputs.new_version }}
 
     steps:
-      - name: Check out master branch
+      - name: Checkout repo
         uses: actions/checkout@v4
-        with:
-          ref: master
-          fetch-depth: 0  # Fetch full history for tags
 
-      - name: Set executable permissions for gradlew
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Make gradlew executable
         run: chmod +x ./gradlew
 
-      - name: Initialize or update plugin version in gradle.properties
-        id: set_version
+      - name: Build (remapJar)
+        run: ./gradlew clean remapJar -x test
+
+      - name: Show built files
+        run: ls -la build/libs
+        
+      - name: Pick release JAR
+        id: pick
+        shell: bash
         run: |
-          git fetch --tags --force
-          latest_tag=$(git describe --tags $(git rev-list --tags --max-count=1) || echo "v0.0.0")
-          if [ "$latest_tag" = "v0.0.0" ]; then
-            new_version="1.0.0"
-          else
-            version=${latest_tag#v}
-            IFS='.' read -r major minor patch <<< "$version"
-            new_patch=$((patch + 1))
-            new_version="$major.$minor.$new_patch"
-          fi
-          sed -i "s/^plugin_version = .*/plugin_version = $new_version/" gradle.properties
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add gradle.properties
-          git commit -m "chore: set plugin version to $new_version" || echo "No changes to commit"
-          git push origin master
-          echo "new_version=$new_version" >> $GITHUB_OUTPUT
+          set -euo pipefail
 
-      - name: Verify Gradle Wrapper
-        run: ./gradlew --version
+          # Most Loom builds produce:
+          # - <name>-<version>.jar (remapped)
+          # - <name>-<version>-dev.jar (dev)
+          # - <name>-<version>-sources.jar
+          jar="$(ls -1 build/libs/*.jar 2>/dev/null | grep -vE '(-dev|-sources|-javadoc)\.jar$' | head -n 1 || true)"
 
-      - name: Gradle Wrapper Verification
-        uses: gradle/wrapper-validation-action@v1
-        with:
-          min-wrapper-count: 1
-          allow-snapshots: false
-
-      - name: Setup JDK for Java 17
-        uses: actions/setup-java@v3
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-
-      - name: Build Plugin
-        run: ./gradlew build
-
-      - name: Debug JAR files
-        run: |
-          echo "Listing JAR files in build/libs:"
-          ls -l build/libs/*.jar || echo "No JAR files found"
-
-      - name: Rename and Upload artifact
-        run: |
-          jar_file=$(ls build/libs/RusherChat-*.jar | head -n 1)
-          if [ -f "$jar_file" ] && [ "$(basename "$jar_file")" != "RusherChat-${{ steps.set_version.outputs.new_version }}.jar" ]; then
-            mv "$jar_file" "build/libs/RusherChat-${{ steps.set_version.outputs.new_version }}.jar"
-          else
-            echo "JAR already named correctly or not found: $jar_file"
+          if [ -z "$jar" ]; then
+            echo "No suitable jar found in build/libs"
+            exit 1
           fi
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+          echo "Selected jar: $jar"
+          echo "jar_path=$jar" >> "$GITHUB_OUTPUT"
+
+      - name: Upload JAR to GitHub Release
+        uses: softprops/action-gh-release@v2
         with:
-          name: RusherChat
-          path: build/libs/RusherChat-${{ steps.set_version.outputs.new_version }}.jar
-
-  release:
-    needs: build
-    name: Create GitHub Release
-    runs-on: ubuntu-24.04
-
-    permissions:
-      contents: write
-
-    steps:
-      - name: Check out the repository
-        uses: actions/checkout@v4
-        with:
-          ref: master
-          fetch-depth: 0
-
-      - name: Download build artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: RusherChat
-          path: RusherChat
-
-      - name: Debug downloaded artifact
-        run: |
-          echo "Listing downloaded artifacts:"
-          ls -l RusherChat/*.jar || echo "No artifacts found"
-
-      - name: Get and set release tag
-        id: get_tag
-        run: |
-          git fetch --tags --force
-          latest_tag=$(git describe --tags $(git rev-list --tags --max-count=1) || echo "v0.0.0")
-          if [ "$latest_tag" = "v0.0.0" ]; then
-            new_tag="v1.0.0"
-          else
-            version=${latest_tag#v}
-            IFS='.' read -r major minor patch <<< "$version"
-            new_patch=$((patch + 1))
-            new_tag="v$major.$minor.$new_patch"
-          fi
-          echo "NEW_TAG=$new_tag" >> $GITHUB_ENV
-
-      - name: Create and push new tag
+          tag_name: ${{ github.event.release.tag_name }}
+          files: ${{ steps.pick.outputs.jar_path }}
+          fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag ${{ env.NEW_TAG }}
-          git push https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }} ${{ env.NEW_TAG }}
-
-      - name: Create GitHub Release
-        uses: marvinpinto/action-automatic-releases@latest
-        with:
-          repo_token: "${{ secrets.GITHUB_TOKEN }}"
-          automatic_release_tag: "${{ env.NEW_TAG }}"
-          prerelease: false
-          title: "RusherChat ${{ env.NEW_TAG }}"
-          files: RusherChat/RusherChat-${{ needs.build.outputs.new_version }}.jar
