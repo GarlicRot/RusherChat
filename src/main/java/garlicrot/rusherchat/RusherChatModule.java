@@ -61,7 +61,6 @@ public class RusherChatModule extends ToggleableModule {
         }
 
         if (chatWindow == null) {
-            // Window sends via handleSend; receives data via callbacks above
             chatWindow = new RusherChatWindow(chatClient, this::handleSend);
             RusherHackAPI.getWindowManager().registerFeature(chatWindow);
 
@@ -104,11 +103,7 @@ public class RusherChatModule extends ToggleableModule {
         }
     }
 
-    /**
-     * Called by ChatClient whenever the server sends an ONLINE_LIST update.
-     */
     private void handleOnlineListUpdate(List<String> users) {
-        // Keep the most recent list so we can apply it when the window is (re)created.
         lastOnlineUsers = new ArrayList<>(users);
 
         if (chatWindow != null) {
