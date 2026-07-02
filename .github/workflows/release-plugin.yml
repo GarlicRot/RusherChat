@@ -1,0 +1,89 @@
+name: Build and Attach Plugin JAR to Release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to attach the built plugin JAR to, example: v1.0.9"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Resolve release tag
+        id: release_tag
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ "${{ github.event_name }}" = "release" ]; then
+            tag="${{ github.event.release.tag_name }}"
+          else
+            tag="${{ inputs.tag }}"
+          fi
+
+          if [ -z "$tag" ]; then
+            echo "Release tag is empty"
+            exit 1
+          fi
+
+          echo "Using release tag: $tag"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.release_tag.outputs.tag }}
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
+
+      - name: Build remapped plugin JAR
+        run: ./gradlew clean remapJar -x test
+
+      - name: Show built files
+        run: ls -la build/libs
+
+      - name: Pick release JAR
+        id: pick
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          jar="$(find build/libs -maxdepth 1 -type f -name "*.jar" \
+            ! -name "*-dev.jar" \
+            ! -name "*-sources.jar" \
+            ! -name "*-javadoc.jar" \
+            | sort \
+            | head -n 1)"
+
+          if [ -z "$jar" ]; then
+            echo "No suitable jar found in build/libs"
+            exit 1
+          fi
+
+          echo "Selected jar: $jar"
+          echo "jar_path=$jar" >> "$GITHUB_OUTPUT"
+
+      - name: Upload JAR to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release_tag.outputs.tag }}
+          files: ${{ steps.pick.outputs.jar_path }}
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
