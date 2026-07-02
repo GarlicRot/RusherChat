@@ -3,6 +3,11 @@
 All notable changes to **RusherChat** are documented here.
 
 ## [Unreleased]
+- `Merge RusherChat production cleanup` – [`323fec4`](https://github.com/GarlicRot/RusherChat/commit/323fec4) by GarlicRot
+- `Fix RusherChat reconnect shutdown lifecycle` – [`118eb64`](https://github.com/GarlicRot/RusherChat/commit/118eb64) by GarlicRot
+- `Prepare RusherChat plugin for production` – [`68bfebb`](https://github.com/GarlicRot/RusherChat/commit/68bfebb) by GarlicRot
+
+
 - `Merge remote-tracking branch 'origin/master'` – [`3d2a1ed`](https://github.com/GarlicRot/RusherChat/commit/3d2a1ed) by GarlicRot
 - `feat: enable RusherChat by default chore: version bump` – [`87e3982`](https://github.com/GarlicRot/RusherChat/commit/87e3982) by GarlicRot
 - `Update build-release.yml` – [`7e7849c`](https://github.com/GarlicRot/RusherChat/commit/7e7849c) by GarlicRot
