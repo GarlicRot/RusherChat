@@ -4,14 +4,14 @@
 
 <p align="center">
   <img src="https://img.shields.io/github/downloads/GarlicRot/RusherChat/total?label=Downloads" alt="GitHub Downloads (all assets, all releases)">
-  <img src="https://img.shields.io/badge/Minecraft-1.20.1%20to%201.21.4-62b47a?style=flat&logo=minecraft&logoColor=white" alt="Minecraft Version">
+  <img src="https://img.shields.io/badge/Minecraft-1.20.1%20to%201.21.11-62b47a?style=flat&logo=minecraft&logoColor=white" alt="Minecraft Version">
   <img src="https://img.shields.io/badge/%F0%9F%A7%84-Approved%20%E2%9C%94%EF%B8%8F-blue?style=flat" alt="🧄 Approved ✔️">
 </p>
 
 
 ## Overview
 
-RusherChat allows users running the plugin to connect and chat across any Minecraft version available to RusherHacks through a shared WebSocket server. Messages are transmitted instantly and displayed in a dedicated chat window within RusherHack.
+RusherChat allows users running the plugin to connect and chat across any Minecraft version available to RusherHack through a shared WebSocket server. Messages are transmitted instantly and displayed in a dedicated chat window within RusherHack.
 
 
 ## Features

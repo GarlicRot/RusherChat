@@ -38,7 +38,6 @@ public class ChatClient {
     private static final Logger LOGGER = Logger.getLogger(ChatClient.class.getName());
     private static final int MAX_MESSAGE_LENGTH = 256;
     private static final boolean AUTO_RECONNECT = true;
-    private static final boolean SHOW_JOIN_MESSAGE = true;
 
     private static final SecureRandom RAND = new SecureRandom();
 
@@ -67,25 +66,27 @@ public class ChatClient {
 
     static {
         Logger logger = Logger.getLogger("garlicrot.rusherchat");
-        logger.setLevel(Level.INFO);
+        logger.setLevel(Level.WARNING);
         logger.setUseParentHandlers(false);
 
-        ConsoleHandler handler = new ConsoleHandler();
-        handler.setLevel(Level.INFO);
-        handler.setFormatter(new Formatter() {
-            @Override
-            public String format(LogRecord record) {
-                return String.format(
-                        "%tF %<tT [%s] %s - %s%s%n",
-                        record.getMillis(),
-                        record.getLevel(),
-                        record.getLoggerName(),
-                        record.getMessage(),
-                        record.getThrown() != null ? " " + record.getThrown() : ""
-                );
-            }
-        });
-        logger.addHandler(handler);
+        if (logger.getHandlers().length == 0) {
+            ConsoleHandler handler = new ConsoleHandler();
+            handler.setLevel(Level.WARNING);
+            handler.setFormatter(new Formatter() {
+                @Override
+                public String format(LogRecord record) {
+                    return String.format(
+                            "%tF %<tT [%s] %s - %s%s%n",
+                            record.getMillis(),
+                            record.getLevel(),
+                            record.getLoggerName(),
+                            record.getMessage(),
+                            record.getThrown() != null ? " " + record.getThrown() : ""
+                    );
+                }
+            });
+            logger.addHandler(handler);
+        }
     }
 
     public ChatClient(
@@ -293,11 +294,7 @@ public class ChatClient {
                 }
 
                 wsClient.send(gson.toJson(login));
-
-                if (SHOW_JOIN_MESSAGE) {
-                    onReceive.accept("§7[System] Connected to chat server.");
-                }
-                LOGGER.info("Connected to " + serverUri + " as " + username + " (clientVersion=" + clientVersion + ")");
+                LOGGER.fine("Connected to " + serverUri + " as " + username + " (clientVersion=" + clientVersion + ")");
                 startPing();
             }
 
@@ -443,6 +440,7 @@ public class ChatClient {
         String username = Minecraft.getInstance().getUser().getName();
         Message msg = new Message(Message.Type.CHAT, username, content);
         wsClient.send(gson.toJson(msg));
+
         LOGGER.fine("Sent message: " + content);
     }
 
