@@ -3,6 +3,9 @@
 All notable changes to **RusherChat** are documented here.
 
 ## [Unreleased]
+- `Match README style with server repo` – [`59ab8d8`](https://github.com/GarlicRot/RusherChat/commit/59ab8d8) by GarlicRot
+
+
 - `Simplify README` – [`5c74f79`](https://github.com/GarlicRot/RusherChat/commit/5c74f79) by GarlicRot
 - `Remove duplicate release workflow` – [`43bb235`](https://github.com/GarlicRot/RusherChat/commit/43bb235) by GarlicRot
 - `Add release workflow for plugin jar` – [`b831106`](https://github.com/GarlicRot/RusherChat/commit/b831106) by GarlicRot
