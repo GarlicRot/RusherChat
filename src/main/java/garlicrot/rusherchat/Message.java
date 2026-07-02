@@ -6,7 +6,13 @@ public class Message {
         LOGIN,
         CHAT,
         SYSTEM,
-        WHISPER
+        WHISPER,
+
+        // Structured server protocol messages.
+        // Legacy SYSTEM prefixes are still supported by ChatClient for compatibility.
+        USER_KEY,
+        ONLINE_LIST,
+        OUTDATED_PLUGIN
     }
 
     private Type type;

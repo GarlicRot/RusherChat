@@ -1,5 +1,6 @@
 package garlicrot.rusherchat;
 
+import net.minecraft.client.Minecraft;
 import org.rusherhack.client.api.RusherHackAPI;
 import org.rusherhack.client.api.feature.module.ModuleCategory;
 import org.rusherhack.client.api.feature.module.ToggleableModule;
@@ -17,26 +18,29 @@ public class RusherChatModule extends ToggleableModule {
 
     private RusherChatWindow chatWindow;
     private ChatClient chatClient;
+    private boolean startupAllowed = false;
     private final List<String> messageQueue = new ArrayList<>();
     private List<String> lastOnlineUsers = new ArrayList<>();
 
     static {
         Logger logger = Logger.getLogger("garlicrot.rusherchat");
-        logger.setLevel(Level.INFO);
+        logger.setLevel(Level.WARNING);
         logger.setUseParentHandlers(false);
 
-        ConsoleHandler handler = new ConsoleHandler();
-        handler.setLevel(Level.INFO);
-        handler.setFormatter(new Formatter() {
-            @Override
-            public String format(LogRecord r) {
-                return String.format(
-                        "%tF %<tT [%s] %s - %s%n",
-                        r.getMillis(), r.getLevel(), r.getLoggerName(), r.getMessage()
-                );
-            }
-        });
-        logger.addHandler(handler);
+        if (logger.getHandlers().length == 0) {
+            ConsoleHandler handler = new ConsoleHandler();
+            handler.setLevel(Level.WARNING);
+            handler.setFormatter(new Formatter() {
+                @Override
+                public String format(LogRecord r) {
+                    return String.format(
+                            "%tF %<tT [%s] %s - %s%n",
+                            r.getMillis(), r.getLevel(), r.getLoggerName(), r.getMessage()
+                    );
+                }
+            });
+            logger.addHandler(handler);
+        }
     }
 
     private RusherChatModule() {
@@ -50,6 +54,29 @@ public class RusherChatModule extends ToggleableModule {
 
     @Override
     public void onEnable() {
+        if (!startupAllowed) {
+            LOGGER.fine("RusherChat module enabled before UI startup was ready; waiting for delayed startup.");
+            return;
+        }
+
+        startRusherChat();
+    }
+
+    @Override
+    public void onDisable() {
+        LOGGER.fine("RusherChat is always enabled while the plugin is installed; re-enabling module.");
+        startRusherChat();
+
+        if (!this.isToggled()) {
+            this.toggle();
+        }
+    }
+
+    public void allowStartup() {
+        startupAllowed = true;
+    }
+
+    public void startRusherChat() {
         if (chatClient == null) {
             chatClient = new ChatClient(
                     CHAT_ENDPOINT,
@@ -57,17 +84,14 @@ public class RusherChatModule extends ToggleableModule {
                     this::handleIncoming,
                     this::handleOnlineListUpdate
             );
-            chatClient.connect();
         }
 
         if (chatWindow == null) {
             chatWindow = new RusherChatWindow(chatClient, this::handleSend);
             RusherHackAPI.getWindowManager().registerFeature(chatWindow);
-
             if (!lastOnlineUsers.isEmpty()) {
                 chatWindow.setOnlineUsers(lastOnlineUsers);
-            }
-        }
+            }        }
 
         chatWindow.setHidden(false);
 
@@ -75,10 +99,11 @@ public class RusherChatModule extends ToggleableModule {
             messageQueue.forEach(this::handleIncoming);
             messageQueue.clear();
         }
+
+        chatClient.connect();
     }
 
-    @Override
-    public void onDisable() {
+    public void shutdownRusherChat() {
         if (chatWindow != null) {
             chatWindow.setHidden(true);
         }
@@ -96,18 +121,26 @@ public class RusherChatModule extends ToggleableModule {
     }
 
     private void handleIncoming(String message) {
-        if (chatWindow != null) {
-            chatWindow.addMessage(message);
-        } else {
-            messageQueue.add(message);
-        }
+        if (message == null) return;
+
+        Minecraft.getInstance().execute(() -> {
+            if (chatWindow != null) {
+                chatWindow.addMessage(message);
+            } else {
+                messageQueue.add(message);
+            }
+        });
     }
 
     private void handleOnlineListUpdate(List<String> users) {
-        lastOnlineUsers = new ArrayList<>(users);
+        List<String> safeUsers = new ArrayList<>(users);
 
-        if (chatWindow != null) {
-            chatWindow.setOnlineUsers(users);
-        }
+        Minecraft.getInstance().execute(() -> {
+            lastOnlineUsers = safeUsers;
+            if (chatWindow != null) {
+                chatWindow.setOnlineUsers(safeUsers);
+            } else {
+            }
+        });
     }
 }

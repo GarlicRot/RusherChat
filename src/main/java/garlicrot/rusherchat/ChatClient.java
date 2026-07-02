@@ -38,7 +38,6 @@ public class ChatClient {
     private static final Logger LOGGER = Logger.getLogger(ChatClient.class.getName());
     private static final int MAX_MESSAGE_LENGTH = 256;
     private static final boolean AUTO_RECONNECT = true;
-    private static final boolean SHOW_JOIN_MESSAGE = true;
 
     private static final SecureRandom RAND = new SecureRandom();
 
@@ -53,6 +52,7 @@ public class ChatClient {
 
     private WebSocketClient wsClient;
     private final AtomicBoolean connected = new AtomicBoolean(false);
+    private volatile boolean intentionalClose = false;
     private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(2);
     private ScheduledFuture<?> reconnectTask;
     private ScheduledFuture<?> pingTask;
@@ -67,25 +67,27 @@ public class ChatClient {
 
     static {
         Logger logger = Logger.getLogger("garlicrot.rusherchat");
-        logger.setLevel(Level.INFO);
+        logger.setLevel(Level.WARNING);
         logger.setUseParentHandlers(false);
 
-        ConsoleHandler handler = new ConsoleHandler();
-        handler.setLevel(Level.INFO);
-        handler.setFormatter(new Formatter() {
-            @Override
-            public String format(LogRecord record) {
-                return String.format(
-                        "%tF %<tT [%s] %s - %s%s%n",
-                        record.getMillis(),
-                        record.getLevel(),
-                        record.getLoggerName(),
-                        record.getMessage(),
-                        record.getThrown() != null ? " " + record.getThrown() : ""
-                );
-            }
-        });
-        logger.addHandler(handler);
+        if (logger.getHandlers().length == 0) {
+            ConsoleHandler handler = new ConsoleHandler();
+            handler.setLevel(Level.WARNING);
+            handler.setFormatter(new Formatter() {
+                @Override
+                public String format(LogRecord record) {
+                    return String.format(
+                            "%tF %<tT [%s] %s - %s%s%n",
+                            record.getMillis(),
+                            record.getLevel(),
+                            record.getLoggerName(),
+                            record.getMessage(),
+                            record.getThrown() != null ? " " + record.getThrown() : ""
+                    );
+                }
+            });
+            logger.addHandler(handler);
+        }
     }
 
     public ChatClient(
@@ -271,12 +273,14 @@ public class ChatClient {
     // --- Connection logic ---
 
     public void connect() {
+        if (intentionalClose || scheduler.isShutdown()) return;
         if (connected.get() || (wsClient != null && wsClient.isOpen())) return;
 
         wsClient = new WebSocketClient(serverUri) {
             @Override
             public void onOpen(ServerHandshake handshakedata) {
                 connected.set(true);
+                cancelReconnectTask();
 
                 String username = Minecraft.getInstance().getUser().getName();
                 Message login = new Message(Message.Type.LOGIN, username, null, null, null, false);
@@ -293,11 +297,7 @@ public class ChatClient {
                 }
 
                 wsClient.send(gson.toJson(login));
-
-                if (SHOW_JOIN_MESSAGE) {
-                    onReceive.accept("§7[System] Connected to chat server.");
-                }
-                LOGGER.info("Connected to " + serverUri + " as " + username + " (clientVersion=" + clientVersion + ")");
+                LOGGER.fine("Connected to " + serverUri + " as " + username + " (clientVersion=" + clientVersion + ")");
                 startPing();
             }
 
@@ -358,13 +358,19 @@ public class ChatClient {
             @Override
             public void onClose(int code, String reason, boolean remote) {
                 connected.set(false);
-                onReceive.accept("§7[System] Disconnected: " + reason + " (Code: " + code + ")");
                 stopPing();
+
+                if (intentionalClose || scheduler.isShutdown()) {
+                    return;
+                }
+
+                LOGGER.warning("Disconnected from RusherChat server: " + reason + " (Code: " + code + ")");
+
                 if (AUTO_RECONNECT) {
-                    onReceive.accept("§7[System] Reconnecting...");
                     startReconnectLoop();
                 }
             }
+
 
             @Override
             public void onError(Exception ex) {
@@ -443,6 +449,7 @@ public class ChatClient {
         String username = Minecraft.getInstance().getUser().getName();
         Message msg = new Message(Message.Type.CHAT, username, content);
         wsClient.send(gson.toJson(msg));
+
         LOGGER.fine("Sent message: " + content);
     }
 
@@ -544,14 +551,23 @@ public class ChatClient {
 
     // --- Lifecycle ---
 
+
     public void close() {
+        intentionalClose = true;
         connected.set(false);
+
+        cancelReconnectTask();
         stopPing();
+
         if (wsClient != null) {
-            wsClient.close();
+            try {
+                wsClient.close();
+            } catch (Exception e) {
+                LOGGER.log(Level.WARNING, "Error while closing websocket", e);
+            }
             wsClient = null;
-            LOGGER.fine("WebSocketClient closed.");
         }
+
         try {
             if (!scheduler.isShutdown()) {
                 scheduler.shutdown();
@@ -565,15 +581,26 @@ public class ChatClient {
         }
     }
 
+
+
     private void startReconnectLoop() {
-        if (reconnectTask != null && !reconnectTask.isCancelled()) return;
+        if (intentionalClose || scheduler.isShutdown()) return;
+        if (reconnectTask != null && !reconnectTask.isDone() && !reconnectTask.isCancelled()) return;
 
         reconnectTask = scheduler.scheduleWithFixedDelay(() -> {
-            if (!connected.get() && (wsClient == null || !wsClient.isOpen())) {
+            if (!intentionalClose && !connected.get() && !scheduler.isShutdown()) {
                 connect();
             }
-        }, 5, 5, TimeUnit.SECONDS);
+        }, 5, 10, TimeUnit.SECONDS);
     }
+
+    private void cancelReconnectTask() {
+        if (reconnectTask != null) {
+            reconnectTask.cancel(false);
+            reconnectTask = null;
+        }
+    }
+
 
     private void startPing() {
         if (pingTask != null && !pingTask.isCancelled()) return;
